@@ -446,6 +446,15 @@ class Transcriber(DikteTest):
         self.assertEqual(call.call_count, ft.RETRIES)
         self.assertIn("502", failures[0])
 
+    def test_a_timeout_is_given_fewer_tries_than_a_refusal(self):
+        """Ten minutes that may have been billed is not asked for seven times."""
+        call = mock.Mock(side_effect=api.ApiError("timed out", None, retryable=True))
+        with mock.patch.object(ft.FileTranscriber, "_wait"):
+            _, failures, _, _ = self.run_chain(fail=call)
+        self.assertEqual(call.call_count, ft.SLOW_RETRIES)
+        self.assertLess(ft.SLOW_RETRIES, ft.RETRIES)
+        self.assertIn("timed out", failures[0])
+
     def test_what_was_heard_before_the_failure_is_still_handed_over(self):
         """An hour already transcribed is not thrown away over the chunk after it."""
         boom = api.ApiError("HTTP 502: timeout", 502)

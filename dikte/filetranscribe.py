@@ -41,7 +41,9 @@ OVERLAP_SECONDS = 30         # a whisper window: how far back a chunk starts
 WAV_CHUNK_SECONDS = 600      # 19 MB, for the caller that uploads the WAV itself
 CLEANUP_CHUNK_CHARS = 12000  # keep each cleanup call comfortably small
 HOSTED_TIMEOUT = 600         # a quarter hour of audio, with room for the upload
-RETRIES = 3                  # how many times one chunk is asked for in all
+RETRIES = 7                  # tries in all when the gateway refused quickly; the waits add up to about five minutes
+SLOW_RETRIES = 3             # tries in all for any other failure, timeouts among them, which may have been billed
+QUICK_REFUSALS = frozenset({429, 502, 503})  # answered fast, and the model never ran
 RETRY_WAIT = 5               # seconds before the second try, doubled after that
 RATE = 16000
 MIN_SUBTITLE_SECONDS = 1.5   # how long a cue with no end time of its own stays up
@@ -112,16 +114,22 @@ class FileTranscriber(QObject):
         rather than throwing the run away over. `stage` is what the status line
         said before the failure, put back once the wait is over.
         """
-        for attempt in range(1, RETRIES + 1):
+        attempt = 0
+        while True:
+            attempt += 1
             self._check()
             try:
                 return call()
             except api.ApiError as exc:
-                if attempt == RETRIES or not exc.retryable:
+                # A gateway turning the request away is cheap to ask again and
+                # often over in a minute or two. A timeout cost ten minutes and
+                # may have been billed, so it gets fewer goes.
+                total = RETRIES if exc.status in QUICK_REFUSALS else SLOW_RETRIES
+                if attempt >= total or not exc.retryable:
                     raise
                 self.progress.emit(t(
                     "{error} Trying again ({attempt}/{total})…",
-                    error=exc, attempt=attempt + 1, total=RETRIES))
+                    error=exc, attempt=attempt + 1, total=total))
                 self._wait(RETRY_WAIT * 2 ** (attempt - 1))
                 self.progress.emit(stage)
 
