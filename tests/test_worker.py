@@ -5,6 +5,7 @@ what gets pasted, what is written to the history, and what happens to the audio
 afterwards. A pull request that reorders any of it shows up here.
 """
 
+import collections
 import contextlib
 import io
 import os
@@ -35,7 +36,7 @@ class Chain(DikteTest):
                   cleaned="Book it for Thursday.",
                   cleanup_error=None, answer=("Booked.", ""), rms=None,
                   clipboard=b"what was there before", paste_error=None,
-                  detected="en", focus=None):
+                  detected="en", focus=None, retry=None):
         pipeline = worker.Pipeline(self.conf)
         done, failures, stages, cancels = [], [], [], []
         pipeline.finished.connect(lambda *args: done.append(args))
@@ -82,7 +83,7 @@ class Chain(DikteTest):
                      "read_clipboard": read_clipboard}
             pipeline._work(self.wav, duration,
                            self.rms if rms is None else rms, ask, paste_override,
-                           focus)
+                           focus, retry)
         return {"done": done, "failures": failures, "stages": stages,
                 "cancelled": cancels, "sleeps": sleeps, **calls}
 
@@ -166,6 +167,96 @@ class Chain(DikteTest):
         kept = list(cfg.RECORDINGS_DIR.glob("*.wav"))
         self.assertEqual(len(kept), 1)
         self.assertFalse(os.path.exists(self.wav))
+
+    # ---- a failed dictation in the history ----------------------------------
+
+    def test_a_failed_dictation_is_listed_with_its_recording(self):
+        """The history shows the failure and where its audio went, so it can
+        be tried again from there."""
+        self.run_chain(transcribe_error=api.ApiError("server down"))
+        row, = cfg.read_history()
+        self.assertTrue(row["failed"])
+        self.assertEqual(row["error"], "server down")
+        self.assertEqual(row["text"], "")
+        self.assertEqual(row["duration"], 2.0)
+        self.assertEqual(row["audio"],
+                         str(next(cfg.RECORDINGS_DIR.glob("*.wav"))))
+
+    def test_a_failed_command_leaves_no_retry_row(self):
+        self.run_chain(ask=True, transcribe_error=api.ApiError("server down"))
+        self.assertEqual(cfg.read_history(), [])
+
+    def test_a_failure_after_the_row_was_written_adds_no_second_row(self):
+        """The clipboard refusing a finished transcript is not a failed
+        dictation: the transcript is already in the history."""
+        with mock.patch.object(paste, "copy",
+                               side_effect=paste.PasteError("no wl-copy")):
+            self.conf["language"] = "tr"
+            pipeline = worker.Pipeline(self.conf)
+            with contextlib.redirect_stderr(io.StringIO()), \
+                    mock.patch.object(api, "transcribe", return_value="hello"), \
+                    mock.patch.object(api, "cleanup", return_value="Hello."), \
+                    mock.patch.object(paste, "read_clipboard", return_value=None):
+                pipeline._work(self.wav, 2.0, self.rms, False, None)
+        row, = cfg.read_history()
+        self.assertEqual(row["text"], "Hello.")
+        self.assertNotIn("failed", row)
+
+    def test_a_retry_puts_the_transcript_in_the_failed_rows_place(self):
+        self.run_chain(transcribe_error=api.ApiError("server down"))
+        failed, = cfg.read_history()
+        self.wav = failed["audio"]
+        run = self.run_chain(retry=failed, paste_override=False, rms=[])
+        self.assertEqual(run["failures"], [])
+        row, = cfg.read_history()
+        self.assertEqual(row["text"], "Book it for Thursday.")
+        self.assertEqual(row["ts"], failed["ts"])
+        self.assertNotIn("failed", row)
+        run["copy"].assert_called_once_with("Book it for Thursday.")
+        run["press"].assert_not_called()
+        # Done with, so gone, like any other dictation's recording.
+        self.assertEqual(list(cfg.RECORDINGS_DIR.glob("*.wav")), [])
+
+    def test_a_retry_that_fails_again_updates_its_row(self):
+        self.run_chain(transcribe_error=api.ApiError("server down"))
+        failed, = cfg.read_history()
+        self.wav = failed["audio"]
+        run = self.run_chain(retry=failed, rms=[],
+                             transcribe_error=api.ApiError("still down", 402))
+        self.assertIn("still down", run["failures"][0])
+        row, = cfg.read_history()
+        self.assertEqual(row["error"], "still down")
+        self.assertTrue(os.path.isfile(row["audio"]))
+        self.assertEqual(len(list(cfg.RECORDINGS_DIR.glob("*.wav"))), 1)
+
+    def test_a_retry_whose_recording_cannot_be_moved_keeps_it(self):
+        """The kept file is the only copy of the speech: a retry that fails
+        and cannot move it must not delete it on the way out."""
+        self.run_chain(transcribe_error=api.ApiError("server down"))
+        failed, = cfg.read_history()
+        self.wav = failed["audio"]
+        with mock.patch.object(worker.shutil, "move", side_effect=OSError("full")):
+            self.run_chain(retry=failed, rms=[],
+                           transcribe_error=api.ApiError("still down", 402))
+        self.assertTrue(os.path.isfile(failed["audio"]))
+
+    def test_a_retried_recording_stays_put_when_audio_is_kept(self):
+        self.run_chain(transcribe_error=api.ApiError("server down"))
+        failed, = cfg.read_history()
+        self.conf["keep_audio"] = True
+        self.wav = failed["audio"]
+        self.run_chain(retry=failed, rms=[])
+        self.assertEqual(list(cfg.RECORDINGS_DIR.glob("*.wav")),
+                         [cfg.RECORDINGS_DIR / os.path.basename(failed["audio"])])
+
+    def test_a_retry_whose_recording_is_gone_says_so(self):
+        failed = {"ts": "x", "failed": True, "audio": str(self.path("gone.wav"))}
+        cfg.append_history(failed)
+        self.wav = failed["audio"]
+        run = self.run_chain(retry=failed, rms=[])
+        self.assertIn("no longer there", run["failures"][0])
+        run["transcribe_detected"].assert_not_called()
+        self.assertEqual(cfg.read_history(), [failed])
 
     # ---- the retry ladder ---------------------------------------------------
 
@@ -472,6 +563,18 @@ class Chain(DikteTest):
 
 
 class Busy(DikteTest):
+    def test_one_recording_is_retried_once_at_a_time(self):
+        pipeline = worker.Pipeline(self.config())
+        gate = threading.Event()
+        pipeline._work = lambda *job: gate.wait(5)
+        row = {"failed": True, "audio": "/kept.wav"}
+        self.assertIsNone(pipeline.run("/kept.wav", 1.0, retry=row))
+        self.assertIs(pipeline.run("/kept.wav", 1.0, retry=row), False)
+        gate.set()
+        pipeline._thread.join(5)
+        self.assertIsNone(pipeline.run("/kept.wav", 1.0, retry=row))
+        pipeline._thread.join(5)
+
     def test_a_second_run_while_one_is_going_waits_its_turn(self):
         """The microphone is free while a transcript is being cleaned up, so
         the next dictation can already have been spoken by then. It has to run
@@ -511,6 +614,58 @@ class Busy(DikteTest):
     def test_the_chunk_length_matches_the_level_meter(self):
         """The silence thresholds are read in seconds, so the two must agree."""
         self.assertAlmostEqual(worker.CHUNK_SECONDS, 1024 / 16000)
+
+
+class RetriesAnswerNoWaiter(DikteTest):
+    """A retry started from the history shares the dictation queue, but a
+    terminal waiting on its own dictation must be answered with that one."""
+
+    def setUp(self):
+        super().setUp()
+        from dikte import app as dikte_module
+
+        class Bare:
+            """As much of the application as the two methods touch."""
+
+            state = "idle"
+            settings_window = None
+            _transcripts_pending = 0
+            retry_dictation = dikte_module.Dikte.retry_dictation
+            _transcript_settled = dikte_module.Dikte._transcript_settled
+
+            def __init__(self):
+                self._queued_retries = collections.deque()
+                self.answered, self.homes = [], []
+                self.pipeline = mock.Mock()
+                self.pipeline.run.return_value = None
+
+            def _set_state(self, state):
+                self.state = state
+
+            def _settle(self, _kind, payload):
+                self.answered.append(payload)
+
+            def _home_settled(self, _kind, payload):
+                self.homes.append(payload)
+
+        self.app = Bare()
+
+    def test_a_dictation_ahead_of_a_retry_is_answered_with_its_own_text(self):
+        self.app._transcripts_pending += 1
+        self.app._queued_retries.append(False)
+        self.app.retry_dictation({"audio": "/kept.wav", "duration": 1})
+        self.app._transcript_settled({"text": "mine"})
+        self.assertEqual(self.app.answered, [{"text": "mine"}])
+        self.app._transcript_settled({"text": "retried"})
+        self.assertEqual(self.app.answered, [{"text": "mine"}])
+        self.assertEqual(self.app.homes, [{"text": "retried"}])
+        self.assertEqual(self.app.state, "idle")
+
+    def test_a_retry_refused_as_a_duplicate_leaves_no_trace(self):
+        self.app.pipeline.run.return_value = False
+        self.app.retry_dictation({"audio": "/kept.wav", "duration": 1})
+        self.assertEqual(self.app._transcripts_pending, 0)
+        self.assertEqual(list(self.app._queued_retries), [])
 
 
 if __name__ == "__main__":

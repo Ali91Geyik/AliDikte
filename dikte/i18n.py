@@ -549,6 +549,14 @@ TR = {
         "Geçmiş bu sayıyı aştıktan sonra, her yeni kayıt geldiğinde en eski kayıt "
         "silinir. Hepsini tutmak için 0 yaz.",
     "Delete the {count} selected entries?": "Seçili {count} kayıt silinsin mi?",
+    "Retry": "Tekrar dene",
+    "Transcribe the kept recording of a failed dictation again. The "
+    "text goes to the clipboard.":
+        "Başarısız bir diktenin saklanan kaydını yeniden yazıya döker. Metin "
+        "panoya kopyalanır.",
+    "The recording was kept; select it and press Retry.":
+        "Kayıt saklandı; seçip Tekrar dene'ye bas.",
+    "The recording is no longer there: {path}": "Kayıt artık yerinde değil: {path}",
     "Delete the whole history? This cannot be undone.":
         "Geçmişin tamamı silinsin mi? Bu geri alınamaz.",
 

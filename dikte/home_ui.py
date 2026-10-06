@@ -319,7 +319,8 @@ class HomeWindow(QWidget):
     def _open_selected(self, *_):
         rows = self.settings._selected_rows()
         if rows:
-            self._open_text("\n\n".join(row.get("text", "") for row in rows))
+            self._open_text("\n\n".join(row.get("text", "") for row in rows
+                                         if not row.get("failed")))
 
     def _open_text(self, text):
         if not text:
@@ -360,7 +361,10 @@ class HomeWindow(QWidget):
 
     def refresh_results(self, *_):
         rows = cfg.read_history(self.conf["history_limit"])
-        result = next((row for row in reversed(rows) if row.get("mode") != "ask"), {})
+        # A failed dictation has no text to show; the failure itself is on the
+        # status line, and its retry lives in the history.
+        result = next((row for row in reversed(rows)
+                       if row.get("mode") != "ask" and not row.get("failed")), {})
         answer = next((row for row in reversed(rows) if row.get("mode") == "ask"), {})
         self._set_result(result, answer)
 

@@ -998,6 +998,24 @@ def amend_history(entry, **changes):
     return None
 
 
+def replace_history(entry, new):
+    """Put `new` where `entry` stood, matched on its whole content.
+
+    For a failed dictation retried from the history: the transcript takes the
+    failed row's place in the list instead of arriving as a second entry. None
+    when the row is gone, deleted or trimmed while the retry ran."""
+    wanted = _row_key(entry)
+    with _FILES_LOCK:
+        rows = _read_history()
+        for index, row in enumerate(rows):
+            if _row_key(row) == wanted:
+                rows[index] = new
+                _write_history([json.dumps(r, ensure_ascii=False) + "\n"
+                                for r in rows])
+                return new
+    return None
+
+
 def delete_history(rows):
     """Remove the given entries, matched on their whole content rather than on a
     line number: the worker may have appended a new one since the list was read."""

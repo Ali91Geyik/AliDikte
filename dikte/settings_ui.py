@@ -33,6 +33,7 @@ from . import ipc
 from . import meeting
 from . import paste
 from . import update
+from . import worker
 from .filetranscribe import FileTranscriber
 from .i18n import t
 from . import theme
@@ -946,6 +947,11 @@ class LocalModelBox(QGroupBox):
             self.status.setText(t("{name} has not been downloaded yet.", name=name))
 
 
+def _retryable(row):
+    """A failed dictation whose kept recording is still on disk."""
+    return bool(row.get("failed")) and worker.is_kept_recording(row.get("audio"))
+
+
 class SettingsWindow(QDialog):
     applied = pyqtSignal()
     # A save changed the interface language. Every label below is translated
@@ -955,6 +961,9 @@ class SettingsWindow(QDialog):
     # A newer release this window's own check found, so that the tray icon
     # hears about it from here rather than waiting for its own next check.
     update_found = pyqtSignal(object)
+    # A failed dictation in the history the user asked to try again, as its
+    # row. The owner runs it, since the dictation chain is the owner's.
+    retry_requested = pyqtSignal(dict)
 
     def _sources_once(self):
         """One device listing per window build, shared by every combo.
@@ -2337,6 +2346,7 @@ class SettingsWindow(QDialog):
         delete_key = QShortcut(QKeySequence.StandardKey.Delete, self.history)
         delete_key.setContext(Qt.ShortcutContext.WidgetShortcut)
         delete_key.activated.connect(self._delete_history)
+        self.history.itemSelectionChanged.connect(self._sync_history_actions)
         layout.addWidget(self.history, 1)
 
         self.history_limit = QSpinBox()
@@ -2348,6 +2358,13 @@ class SettingsWindow(QDialog):
             "every time a new one arrives. Set it to 0 to keep everything."
         ))
 
+        self.history_retry = QPushButton(t("Retry"))
+        self.history_retry.setToolTip(t(
+            "Transcribe the kept recording of a failed dictation again. The "
+            "text goes to the clipboard."
+        ))
+        self.history_retry.clicked.connect(self._retry_history)
+        self.history_retry.setEnabled(False)
         copy = QPushButton(t("Copy selected to clipboard"))
         copy.clicked.connect(self._copy_history)
         delete = QPushButton(t("Delete selected"))
@@ -2357,6 +2374,7 @@ class SettingsWindow(QDialog):
         reload_ = QPushButton(t("Reload"))
         reload_.clicked.connect(self._load_history)
         self.history_actions = row = QHBoxLayout()
+        row.addWidget(self.history_retry)
         row.addWidget(copy)
         row.addWidget(delete)
         row.addWidget(clear)
@@ -3711,13 +3729,21 @@ class SettingsWindow(QDialog):
     # ---- history ---------------------------------------------------------
 
     def _load_history(self):
+        # A reload arrives whenever a dictation settles, so whatever was
+        # selected is selected again rather than lost under the user's hand.
+        chosen = {cfg._row_key(row) for row in self._selected_rows()}
         self.history.clear()
         for row in reversed(cfg.read_history(self.conf["history_limit"])):
             text = (row.get("text") or "").replace("\n", " ")
             preview = text[:110] + ("…" if len(text) > 110 else "")
             header = t("{ts}  ({duration} s)",
                        ts=row.get("ts", ""), duration=row.get("duration", 0))
-            if row.get("mode") == "ask":
+            if row.get("failed"):
+                error = (row.get("error") or "").replace("\n", " ")
+                preview = t("Failed: {error}", error=error[:110])
+                if _retryable(row):
+                    preview += "\n" + t("The recording was kept; select it and press Retry.")
+            elif row.get("mode") == "ask":
                 # The text of an answer says nothing about what was asked, and
                 # out of that context half of them read like non sequiturs.
                 asked = (row.get("question") or row.get("raw") or "").replace("\n", " ")
@@ -3730,6 +3756,26 @@ class SettingsWindow(QDialog):
             item = QListWidgetItem(f"{header}\n{preview}")
             item.setData(Qt.ItemDataRole.UserRole, row)
             self.history.addItem(item)
+            if cfg._row_key(row) in chosen:
+                item.setSelected(True)
+        self._sync_history_actions()
+
+    def _retryable_selection(self):
+        """Selected failed dictations whose recording is still there, oldest
+        first, the order they were spoken and should be retried in."""
+        return [row for row in reversed(self._selected_rows()) if _retryable(row)]
+
+    def _sync_history_actions(self):
+        self.history_retry.setEnabled(bool(self._retryable_selection()))
+
+    def _retry_history(self):
+        rows = self._retryable_selection()
+        for row in rows:
+            self.retry_requested.emit(row)
+        if rows:
+            # Until the result reloads the list, a second press would queue
+            # what is already queued.
+            self.history_retry.setEnabled(False)
 
     def _selected_rows(self):
         """Selected entries, newest first, the order they are listed in."""
@@ -3740,7 +3786,8 @@ class SettingsWindow(QDialog):
         rows = self._selected_rows()
         if rows:
             QGuiApplication.clipboard().setText(
-                "\n\n".join(row.get("text", "") for row in rows)
+                "\n\n".join(row.get("text", "") for row in rows
+                             if not row.get("failed"))
             )
 
     def _delete_history(self):
@@ -3782,6 +3829,8 @@ class SettingsWindow(QDialog):
         if item is not None and not item.isSelected():
             self.history.setCurrentItem(item)
         menu = QMenu(self)
+        retry = menu.addAction(t("Retry"))
+        retry.setEnabled(bool(self._retryable_selection()))
         copy = menu.addAction(t("Copy selected to clipboard"))
         delete = menu.addAction(t("Delete selected"))
         menu.addSeparator()
@@ -3791,7 +3840,9 @@ class SettingsWindow(QDialog):
         delete.setEnabled(has_selection)
         clear.setEnabled(self.history.count() > 0)
         chosen = menu.exec(self.history.viewport().mapToGlobal(pos))
-        if chosen is copy:
+        if chosen is retry:
+            self._retry_history()
+        elif chosen is copy:
             self._copy_history()
         elif chosen is delete:
             self._delete_history()

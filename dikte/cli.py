@@ -463,7 +463,9 @@ def _find_history(which):
     if not rows:
         return None
     if which in ("", "last"):
-        return rows[-1]
+        # The newest transcript: a failed dictation has none to show.
+        return next((row for row in reversed(rows) if not row.get("failed")),
+                    None)
     if not which.isdigit():
         return None
     index = int(which)
@@ -475,6 +477,8 @@ def cmd_history_list(opts):
     lines = []
     for index, row in enumerate(reversed(rows), start=1):
         preview = (row.get("text") or "").replace("\n", " ")
+        if row.get("failed"):
+            preview = "failed: " + (row.get("error") or "").replace("\n", " ")
         mode = "ask " if row.get("mode") == "ask" else "    "
         lines.append(
             f"{index:>3}  {row.get('ts', ''):19}  {row.get('duration', 0):>6.1f}s  "
@@ -488,6 +492,8 @@ def cmd_history_show(opts):
     row = _find_history(opts.which)
     if row is None:
         return fail(opts, f"no such entry: {opts.which}")
+    if row.get("failed"):
+        return fail(opts, f"that dictation failed: {row.get('error', '')}")
     body = row.get("raw", "") if opts.raw else row.get("text", "")
     return out(opts, {"ok": True, **row}, body)
 
