@@ -221,7 +221,8 @@ olmasını ister.
   düşer. Yarıda kalan bir işlem ses kaydını saklar, yeniden denemede parası
   ödenmiş transkriptin üstünden devam eder.
 - **Ses ve video dosyaları** Ayarlar → Ses dosyası sekmesinde aynı modellerden
-  geçer; istersen `[dd:ss]` zaman damgalarıyla, uzun dosyalar ffmpeg ile
+  geçer; istersen `[dd:ss]` zaman damgalarıyla, konuşmacı ayırabilen bir modelde
+  konuşmacı etiketleriyle, uzun dosyalar ffmpeg ile
   parçalanarak, sonuç `.txt` ya da `.srt` altyazı olarak kaydedilerek; temizleme
   burada kendi kurallarıyla, altyazı için yazılmış haliyle çalışır: satırlar
   yerinde kalır, hiçbir şey kısaltılmaz.

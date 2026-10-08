@@ -241,12 +241,12 @@ TIMESTAMP_RULE_TR = ("\n\nHer satır [dd:ss] biçiminde bir zaman damgasıyla ba
                      "satırları birleştirme ve sıralarını değiştirme.")
 
 # Appended on top of the timestamp rule when the lines also carry a speaker.
-SPEAKER_RULE_EN = ("\n\nAfter the timestamp each line names who was speaking, as "
+SPEAKER_RULE_EN = ("\n\nEach line, after its timestamp where it has one, names who was speaking, as "
                    "“Name:”. Keep that name exactly as it is and never move a "
                    "sentence from one speaker to another. Two people talking over "
                    "each other is normal in a meeting; leave the lines where they "
                    "are rather than tidying the order.")
-SPEAKER_RULE_TR = ("\n\nZaman damgasından sonra her satır “İsim:” biçiminde kimin "
+SPEAKER_RULE_TR = ("\n\nHer satır, zaman damgası varsa ondan sonra, “İsim:” biçiminde kimin "
                    "konuştuğunu yazıyor. İsmi olduğu gibi bırak, bir cümleyi asla "
                    "başka bir konuşmacıya taşıma. Toplantıda iki kişinin sözünün "
                    "birbirine girmesi olağandır; sırayı düzeltmeye çalışma, "
@@ -543,6 +543,7 @@ DEFAULTS = {
     "start_in_tray": True,
     "file_timestamps": False,
     "file_cleanup": True,
+    "file_speakers": False,         # only offered where api.diarize_model() finds one
     "file_cleanup_prompt": "",      # empty -> language-specific default
     "file_last_dir": "",
 
@@ -823,7 +824,7 @@ class Config:
         return self["cleanup_provider"] == "local"
 
     def cleanup_prompt(self, with_timestamps=False, with_speakers=False,
-                       subtitles=False, speech=""):
+                       subtitles=False, speech="", participants=True):
         """`speech` is the two-letter code of the language that was heard, when
         the transcription model reported one. The default prompts and the
         glossary rule only exist in Turkish and English, so a detected Turkish
@@ -831,7 +832,8 @@ class Config:
         none at all, the English one, which is written not to care what
         language the transcript is in. Nothing else calls this with it, so the
         interface language keeps deciding everywhere the speech was not asked
-        about."""
+        about. `participants` is whether the meeting's names belong in the
+        glossary; a file's speakers are numbered, not the people in a meeting."""
         turkish = (speech == "tr") if speech else i18n.language() == "tr"
         if subtitles:
             prompt = (self["file_cleanup_prompt"].strip()
@@ -841,7 +843,7 @@ class Config:
             prompt = (self["cleanup_prompt"].strip()
                       or (CLEANUP_PROMPT_TR if turkish else CLEANUP_PROMPT_EN))
         glossary = self["transcribe_prompt"].strip()
-        if with_speakers:
+        if with_speakers and participants:
             glossary = "\n".join(x for x in (glossary, self.participants()) if x)
         if glossary:
             rule = GLOSSARY_RULE_TR if turkish else GLOSSARY_RULE_EN

@@ -472,5 +472,97 @@ class Transcriber(DikteTest):
         self.assertTrue(worker.busy)
 
 
+class LinkSpeakers(unittest.TestCase):
+    def test_the_first_chunk_is_numbered_in_the_order_voices_are_heard(self):
+        out = ft.link_speakers([], [(0, 1, "a", "B"), (1, 2, "b", "A"), (2, 3, "c", "B")])
+        self.assertEqual([who for *_, who in out], [0, 1, 0])
+
+    def test_labels_swapped_between_chunks_are_put_back(self):
+        before = [(0, 10, "x", 0), (10, 20, "y", 1)]
+        incoming = [(5, 10, "x", "1"), (10, 20, "y", "0"), (20, 30, "z", "1")]
+        out = ft.link_speakers(before, incoming)
+        self.assertEqual([who for *_, who in out], [0, 1, 0])
+
+    def test_a_voice_silent_in_the_overlap_is_matched_by_elimination(self):
+        before = [(0, 10, "x", 0), (10, 20, "y", 1)]
+        incoming = [(15, 20, "y", "0"), (25, 30, "z", "1")]
+        out = ft.link_speakers(before, incoming)
+        self.assertEqual([who for *_, who in out], [1, 0])
+
+    def test_a_voice_back_after_a_chunk_away_keeps_its_number(self):
+        # The chunk before held only voice 1; voice 0 sat it out and is back.
+        before = [(480, 540, "b", 1)]
+        incoming = [(480, 540, "b", "x"), (600, 700, "a", "y")]
+        out = ft.link_speakers(before, incoming, voices=2)
+        self.assertEqual([who for *_, who in out], [1, 0])
+
+    def test_a_newcomer_is_never_given_a_number_already_in_use(self):
+        before = [(0, 10, "x", 2)]
+        incoming = [(5, 10, "x", "a"), (12, 14, "new", "b"), (15, 16, "newer", "c")]
+        out = ft.link_speakers(before, incoming, voices=3)
+        self.assertEqual([who for *_, who in out], [2, 3, 4])
+
+    def test_a_third_voice_gets_a_number_of_its_own(self):
+        before = [(0, 10, "x", 0)]
+        incoming = [(5, 10, "x", "0"), (12, 14, "new", "1")]
+        out = ft.link_speakers(before, incoming)
+        self.assertEqual([who for *_, who in out], [0, 1])
+
+
+class Speakers(DikteTest):
+    def setUp(self):
+        super().setUp()
+        self.source = make_wav(self.path("input.wav"), tone(1.0))
+        self.conf = self.config(openrouter_api_key="sk-or-test",
+                                transcribe_provider="openrouter",
+                                openrouter_file_model="microsoft/mai-transcribe-2")
+
+    def run_chain(self, timestamps, heard):
+        worker = ft.FileTranscriber(self.conf)
+        done = []
+        worker.finished.connect(lambda *args: done.append(args))
+        with mock.patch.object(ft, "_to_wav", side_effect=lambda *a, **k: self.source), \
+                mock.patch.object(ft, "_to_mp3", side_effect=lambda path, *a, **k: path), \
+                mock.patch.object(ft.shutil, "which", return_value="/usr/bin/ffmpeg"), \
+                mock.patch.object(api, "transcribe_speakers", return_value=heard) as call, \
+                mock.patch.object(api, "transcribe_segments",
+                                  return_value=[(0.0, 1.0, "plain")]):
+            worker._work(self.source, timestamps, False, True)
+        return done, call
+
+    def test_every_timestamped_line_and_cue_says_who_spoke(self):
+        done, _ = self.run_chain(True, [(0.0, 1.0, "hi", "A"), (2.0, 3.0, "yo", "B")])
+        text, cues = done[0]
+        self.assertEqual(text, "[00:00] Speaker 1: hi\n[00:02] Speaker 2: yo")
+        self.assertEqual(cues[1], (2.0, 3.0, "Speaker 2: yo"))
+
+    def test_without_timestamps_a_voice_is_one_line_until_it_changes(self):
+        done, _ = self.run_chain(False, [(0.0, 1.0, "hi", "A"), (1.0, 2.0, "there", "A"),
+                                         (2.0, 3.0, "yo", "B")])
+        self.assertEqual(done[0][0], "Speaker 1: hi there\nSpeaker 2: yo")
+        self.assertEqual(done[0][1], [])
+
+    def test_a_long_turn_goes_on_in_new_named_lines(self):
+        line = "word " * 200
+        done, _ = self.run_chain(False, [(float(i), i + 1.0, line, "A") for i in range(20)])
+        lines = done[0][0].split("\n")
+        self.assertGreater(len(lines), 1)
+        self.assertTrue(all(x.startswith("Speaker 1: ") for x in lines))
+        self.assertTrue(all(len(x) < ft.CLEANUP_CHUNK_CHARS for x in lines))
+
+    def test_cleanup_is_not_handed_the_meetings_names(self):
+        self.conf["meeting_self_name"] = "Zeynep"
+        prompt = self.conf.cleanup_prompt(with_timestamps=True, with_speakers=True,
+                                          subtitles=True, participants=False)
+        self.assertNotIn("Zeynep", prompt)
+        self.assertIn("Zeynep", self.conf.cleanup_prompt(with_speakers=True))
+
+    def test_a_model_that_cannot_label_speakers_runs_without_them(self):
+        self.conf["openrouter_file_model"] = ""
+        done, call = self.run_chain(True, [])
+        call.assert_not_called()
+        self.assertEqual(done[0][0], "[00:00] plain")
+
+
 if __name__ == "__main__":
     unittest.main()

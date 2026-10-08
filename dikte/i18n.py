@@ -391,6 +391,13 @@ TR = {
     "Audio and video files": "Ses ve video dosyaları",
     "All files": "Tüm dosyalar",
     "Add timestamps": "Zaman damgası ekle",
+    "Tell the speakers apart": "Konuşmacıları ayır",
+    "Puts who is talking in front of every line. Only offered for the models known "
+    "to label speakers.":
+        "Her satırın başına kimin konuştuğunu yazar. Yalnızca konuşmacıları "
+        "etiketlediği bilinen modellerde çıkar.",
+    "Speaker {number}": "Konuşmacı {number}",
+    "{model} cannot tell speakers apart.": "{model} konuşmacıları ayıramıyor.",
     "Prefixes every segment with [mm:ss]. Uses whisper-1 on whichever provider "
     "you picked, the only model that returns segment times.":
         "Her bölümün başına [dd:ss] koyar. Bölüm zamanı döndüren tek model olan "

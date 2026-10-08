@@ -1107,3 +1107,73 @@ class Aborter(unittest.TestCase):
         with self.assertRaises(api.Aborted):
             with aborter.holding(lambda: None):
                 pass
+
+
+class Diarize(DikteTest):
+    def setUp(self):
+        super().setUp()
+        self.wav = str(self.path("clip.wav"))
+        os.makedirs(self.root, exist_ok=True)
+        with open(self.wav, "wb") as fh:
+            fh.write(b"RIFFfake")
+
+    def test_the_openrouter_file_model_is_the_one_asked_first(self):
+        target = OPENROUTER._replace(file_model="microsoft/mai-transcribe-2")
+        self.assertEqual(api.diarize_model(target), "microsoft/mai-transcribe-2")
+
+    def test_the_dictation_model_counts_when_the_file_model_cannot(self):
+        target = OPENROUTER._replace(model="elevenlabs/scribe-v2")
+        self.assertEqual(api.diarize_model(target), "elevenlabs/scribe-v2")
+
+    def test_a_model_nobody_has_seen_label_speakers_is_not_offered(self):
+        self.assertEqual(api.diarize_model(OPENROUTER), "")
+        self.assertEqual(api.diarize_model(OPENAI), "")
+        self.assertEqual(api.diarize_model(GROQ), "")
+
+    def test_openai_has_a_model_of_its_own_for_it(self):
+        target = OPENAI._replace(model="gpt-4o-transcribe-diarize")
+        self.assertEqual(api.diarize_model(target), "gpt-4o-transcribe-diarize")
+
+    def test_openrouter_is_handed_the_providers_own_option(self):
+        target = OPENROUTER._replace(file_model="microsoft/mai-transcribe-2")
+        reply = {"segments": [{"start": 0, "end": 1, "text": "hi", "speaker": 0}]}
+        with fake_urlopen(reply) as calls:
+            api.transcribe_speakers(target, self.wav)
+        fields = multipart_fields(calls[0])
+        self.assertEqual(fields["model"], "microsoft/mai-transcribe-2")
+        self.assertEqual(fields["response_format"], "verbose_json")
+        self.assertEqual(json.loads(fields["provider"]),
+                         {"options": {"azure": {"diarization": {"enabled": True}}}})
+
+    def test_openai_is_asked_in_its_own_format_and_without_a_prompt(self):
+        target = OPENAI._replace(model="gpt-4o-transcribe-diarize")
+        reply = {"segments": [{"start": 0, "end": 1, "text": " hi", "speaker": "A"},
+                              {"start": 1, "end": 2, "text": "yo", "speaker": "B"}]}
+        with fake_urlopen(reply) as calls:
+            out = api.transcribe_speakers(target, self.wav, prompt="glossary")
+        fields = multipart_fields(calls[0])
+        self.assertEqual(fields["response_format"], "diarized_json")
+        self.assertEqual(fields["chunking_strategy"], "auto")
+        self.assertNotIn("prompt", fields)
+        self.assertEqual(out, [(0.0, 1.0, "hi", "A"), (1.0, 2.0, "yo", "B")])
+
+    def test_a_model_that_cannot_is_refused_before_anything_is_sent(self):
+        with fake_urlopen({}) as calls, self.assertRaises(api.ApiError):
+            api.transcribe_speakers(OPENROUTER, self.wav)
+        self.assertEqual(calls, [])
+
+    def test_a_short_cue_is_not_held_over_the_other_voices_answer(self):
+        words = [{"word": "Yes.", "start": 0.0, "end": 0.2, "speaker": 0},
+                 {"word": "Right", "start": 0.5, "end": 0.9, "speaker": 1}]
+        cues = api.speaker_cues({"words": words})
+        self.assertLessEqual(cues[0][1], cues[1][0])
+
+    def test_word_labels_win_and_no_cue_spans_two_speakers(self):
+        words = [{"word": w, "start": i, "end": i + 0.5, "speaker": s}
+                 for i, (w, s) in enumerate([("Hello", 0), ("there.", 0),
+                                             ("Hi", 1), ("back", 1)])]
+        data = {"segments": [{"start": 0, "end": 4, "text": "all of it"}],
+                "words": words}
+        cues = api.speaker_cues(data)
+        self.assertEqual([(text, who) for _, _, text, who in cues],
+                         [("Hello there.", "0"), ("Hi back", "1")])

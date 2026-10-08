@@ -45,6 +45,12 @@ RETRIES = 3                  # how many times one chunk is asked for in all
 RETRY_WAIT = 5               # seconds before the second try, doubled after that
 RATE = 16000
 MIN_SUBTITLE_SECONDS = 1.5   # how long a cue with no end time of its own stays up
+# A diarizing model takes several times as long over the same audio, and the
+# gateway's clock does not stretch for it, so its chunks are shorter. The longer
+# overlap is what the speaker labels of two chunks are matched up on.
+DIARIZE_CHUNK_SECONDS = 300
+DIARIZE_OVERLAP_SECONDS = 60
+TURN_CHARS = CLEANUP_CHUNK_CHARS // 4  # past this a turn goes on in a new line
 
 # The [mm:ss] or [h:mm:ss] prefix a timestamped line starts with.
 STAMP_RE = re.compile(r"^\[(?:(\d+):)?(\d{1,2}):(\d{2})\]\s*")
@@ -72,12 +78,13 @@ class FileTranscriber(QObject):
     def busy(self):
         return self._thread is not None and self._thread.is_alive()
 
-    def start(self, path, timestamps, do_cleanup):
+    def start(self, path, timestamps, do_cleanup, speakers=False):
         if self.busy:
             return
         self._abort = api.Aborter()      # the last one is spent
         self._thread = threading.Thread(
-            target=self._work, args=(path, timestamps, do_cleanup), daemon=True
+            target=self._work, args=(path, timestamps, do_cleanup, speakers),
+            daemon=True,
         )
         self._thread.start()
 
@@ -125,7 +132,7 @@ class FileTranscriber(QObject):
                 self._wait(RETRY_WAIT * 2 ** (attempt - 1))
                 self.progress.emit(stage)
 
-    def _work(self, path, timestamps, do_cleanup):
+    def _work(self, path, timestamps, do_cleanup, speakers=False):
         conf = self.conf
         workdir = None
         pieces = []
@@ -141,7 +148,12 @@ class FileTranscriber(QObject):
 
             target = conf.transcribe_target()
             self._local = ggml.whisper if target.provider == "local" else None
-            chunks = self._chunks(wav_path, workdir, target, timestamps)
+            # Asked of a model nobody has seen label speakers, the switch is
+            # not on offer, and a stale setting is not a reason to fail the run.
+            speakers = speakers and bool(api.diarize_model(target))
+            chunks = self._chunks(wav_path, workdir, target, timestamps, speakers)
+            heard_before = []
+            voices = 0
             if len(chunks) > 1:
                 self.progress.emit(t("Splitting into {count} chunks…", count=len(chunks)))
 
@@ -151,7 +163,23 @@ class FileTranscriber(QObject):
                            index=index, count=len(chunks))
                          if len(chunks) > 1 else t("Transcribing…"))
                 self.progress.emit(stage)
-                if timestamps:
+                if speakers:
+                    heard = self._attempt(lambda: api.transcribe_speakers(
+                        target,
+                        chunk_path,
+                        language=conf["language"],
+                        prompt=conf["transcribe_prompt"],
+                        timeout=HOSTED_TIMEOUT,
+                        aborter=self._abort,
+                    ), stage)
+                    heard = link_speakers(heard_before, [
+                        (start + offset, end + offset, line, who)
+                        for start, end, line, who in heard
+                    ], voices)
+                    heard_before = heard
+                    voices = max([voices] + [who + 1 for *_, who in heard])
+                    segments = stitch(segments, heard)
+                elif timestamps:
                     heard = self._attempt(lambda: api.transcribe_segments(
                         target,
                         chunk_path,
@@ -174,14 +202,14 @@ class FileTranscriber(QObject):
                         aborter=self._abort,
                     ), stage))
 
-            text = _joined(pieces, segments, timestamps)
+            text, cues = _result(pieces, segments, timestamps, speakers)
 
             if do_cleanup and text:
                 self._check()
                 self.progress.emit(t("Cleaning up…"))
-                text = self._cleanup(text, timestamps)
+                text = self._cleanup(text, timestamps, speakers)
 
-            self.finished.emit(text, segments)
+            self.finished.emit(text, cues)
 
         except Cancelled:
             self.progress.emit(t("Stopped."))
@@ -189,9 +217,9 @@ class FileTranscriber(QObject):
             # An hour of a long file already heard is not worth throwing away
             # because the chunk after it failed, or because cleanup did. Hand
             # over what there is, and say in the same breath where it stops.
-            partial = _joined(pieces, segments, timestamps)
+            partial, cues = _result(pieces, segments, timestamps, speakers)
             if partial:
-                self.finished.emit(partial, segments)
+                self.finished.emit(partial, cues)
                 self.failed.emit(t("{error} The transcript up to there is below.",
                                    error=exc))
             else:
@@ -201,7 +229,7 @@ class FileTranscriber(QObject):
             if workdir:
                 shutil.rmtree(workdir, ignore_errors=True)
 
-    def _chunks(self, wav_path, workdir, target, timestamps):
+    def _chunks(self, wav_path, workdir, target, timestamps, speakers=False):
         """[(the file to send, its offset in seconds)], one entry where it can be.
 
         A server on this machine is handed the WAV as it is: nothing is being
@@ -211,29 +239,111 @@ class FileTranscriber(QObject):
             return [(wav_path, 0.0)]
 
         whole = _to_mp3(wav_path, workdir, "audio.mp3", self._abort)
-        seconds = chunk_seconds(whole, wav_seconds(wav_path))
+        duration = wav_seconds(wav_path)
+        seconds = chunk_seconds(whole, duration)
+        if speakers:
+            seconds = min(seconds or duration, DIARIZE_CHUNK_SECONDS)
+            if seconds >= duration:
+                seconds = 0.0
         if not seconds:
             return [(whole, 0.0)]
 
         # Only a timestamped run can tell what it has already heard, so only it
         # can afford the overlap that keeps a cue off the cut.
         self._check()
-        pieces = split_wav(wav_path, workdir, seconds,
-                           OVERLAP_SECONDS if timestamps else 0)
+        overlap = (DIARIZE_OVERLAP_SECONDS if speakers
+                   else OVERLAP_SECONDS if timestamps else 0)
+        pieces = split_wav(wav_path, workdir, seconds, overlap)
         return [(_to_mp3(piece, workdir, f"chunk-{index:03d}.mp3", self._abort), offset)
                 for index, (piece, offset) in enumerate(pieces)]
 
-    def _cleanup(self, text, timestamps):
+    def _cleanup(self, text, timestamps, speakers=False):
         conf = self.conf
         self._local = ggml.llm if cleanup.provider(conf) == "local" else None
-        prompt = conf.cleanup_prompt(with_timestamps=timestamps, subtitles=True)
+        prompt = conf.cleanup_prompt(with_timestamps=timestamps, with_speakers=speakers,
+                                     subtitles=True, participants=False)
+        # A labelled transcript is one turn per line, and a block cut inside a
+        # line would hand the second half back without the name in front.
+        by_line = timestamps or speakers
         out = []
         stage = t("Cleaning up…")
-        for block in split_text(text, timestamps):
+        for block in split_text(text, by_line):
             self._check()
             out.append(self._attempt(
                 lambda: cleanup.run(block, conf, prompt, aborter=self._abort), stage))
-        return ("\n" if timestamps else "\n\n").join(out)
+        return ("\n" if by_line else "\n\n").join(out)
+
+
+def link_speakers(before, incoming, voices=0):
+    """`incoming` with its speaker labels swapped for the ones `before` uses.
+
+    A diarizing model numbers the voices afresh in every request, so one chunk's
+    "0" can be the next one's "1". The chunks overlap, and in the overlap both
+    of them heard the same people say the same things at the same moments: the
+    labels that keep talking over each other there are the same person. Each is
+    paired off with the one it shares the most time with. A voice that is silent
+    in the overlap is matched by elimination when exactly one known voice is left
+    over, and is taken for somebody new otherwise.
+
+    `voices` is how many have been numbered so far in the whole run, not only in
+    the chunk before: someone who sat out that chunk is still a known voice, and
+    a newcomer must not be handed their number. The labels that come out are
+    numbers from 0, in the order the voices were first heard.
+    """
+    known = list(range(max([voices] + [who + 1 for *_, who in before])))
+    shared = {}
+    for start, end, _, who in incoming:
+        for other_start, other_end, _, other in before:
+            overlap = min(end, other_end) - max(start, other_start)
+            if overlap > 0:
+                shared[(who, other)] = shared.get((who, other), 0.0) + overlap
+    mapping, taken = {}, set()
+    for (who, other), _ in sorted(shared.items(), key=lambda item: -item[1]):
+        if who not in mapping and other not in taken:
+            mapping[who] = other
+            taken.add(other)
+    fresh = len(known)
+    for *_, who in incoming:
+        if who in mapping:
+            continue
+        left = [other for other in known if other not in taken]
+        if len(left) == 1:
+            mapping[who] = left[0]
+        else:
+            mapping[who] = fresh
+            fresh += 1
+        taken.add(mapping[who])
+    return [(start, end, text, mapping[who]) for start, end, text, who in incoming]
+
+
+def speaker_name(number):
+    return t("Speaker {number}", number=number + 1)
+
+
+def _result(pieces, segments, timestamps, speakers):
+    """(text, cues) for the window: the transcript, and what an SRT is timed by.
+
+    With speakers, every cue carries the name in front of its text, so the SRT
+    and the timestamped lines both say who is talking. Without timestamps the
+    cues are joined into turns instead, one line for each time the voice changes.
+    """
+    if not speakers:
+        return _joined(pieces, segments, timestamps), (segments if timestamps else [])
+    named = [(start, end, f"{speaker_name(who)}: {line}")
+             for start, end, line, who in segments]
+    if timestamps:
+        return _joined([], named, True), named
+    turns = []
+    for _, _, line, who in segments:
+        # An hour of one voice would otherwise be one line, which cleanup takes
+        # whole whatever its size, since a block is never cut inside a line.
+        if (turns and turns[-1][0] == who
+                and sum(len(x) + 1 for x in turns[-1][1]) < TURN_CHARS):
+            turns[-1][1].append(line)
+        else:
+            turns.append((who, [line]))
+    return "\n".join(f"{speaker_name(who)}: {' '.join(lines)}"
+                     for who, lines in turns), []
 
 
 def _joined(pieces, segments, timestamps):
