@@ -64,6 +64,12 @@ DATA_DIR = paths.DATA_DIR
 BIN_DIR = DATA_DIR / "bin"
 MODELS_DIR = DATA_DIR / "models"
 
+
+def set_models_dir(path):
+    """Use a user-selected model directory, or the platform default."""
+    global MODELS_DIR
+    MODELS_DIR = pathlib.Path(path).expanduser() if path else DATA_DIR / "models"
+
 # Loading a large model onto a GPU is the slow part of a start, and on a cold
 # page cache a large LLM read from a spinning disk is slower still.
 STARTUP_TIMEOUT = 180.0

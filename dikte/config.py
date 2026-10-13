@@ -464,6 +464,9 @@ DEFAULTS = {
     "local_preload": True,          # load the model while Dikte starts, rather
                                     # than on the first dictation
     "local_binary": "",             # empty -> whichever copy ggml.py finds
+    # Empty keeps the platform default. A user can choose an ASCII-only folder
+    # when whisper.cpp cannot open a model below a non-ASCII Windows profile.
+    "local_models_dir": "",
 
     "cleanup_enabled": True,
     "cleanup_provider": "openrouter",  # a name in cleanup.PROVIDERS
@@ -789,6 +792,8 @@ class Config:
 
     def apply_local(self):
         """Hand the local settings to the servers, restarting what they change."""
+        if self["local_models_dir"]:
+            ggml.set_models_dir(self["local_models_dir"])
         device = self["local_device"]
         if device == "auto" and not self["local_gpu"]:
             device = "cpu"

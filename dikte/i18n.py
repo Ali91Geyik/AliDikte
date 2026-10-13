@@ -898,6 +898,14 @@ TR = {
         "deneyin.",
     "Local whisper": "Yerel whisper",
     "Local model": "Yerel model",
+    "Model folder": "Model klasörü",
+    "Choose…": "Seç…",
+    "The folder shared by the local whisper and llama models. Choose "
+    "an ASCII-only path on Windows if your user folder contains "
+    "characters whisper.cpp cannot open. Empty uses the default.":
+        "Yerel whisper ve llama modellerinin ortak klasörü. Windows kullanıcı "
+        "klasörünüzde whisper.cpp'nin açamadığı karakterler varsa yalnızca ASCII "
+        "karakterlerden oluşan bir yol seçin. Boş bırakılırsa varsayılan kullanılır.",
     "Not loaded.": "Yüklü değil.",
     "Loaded; it did not say what it is running on.":
         "Yüklendi; neyin üzerinde çalıştığını söylemedi.",

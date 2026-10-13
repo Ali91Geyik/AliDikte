@@ -745,6 +745,12 @@ class ReadyToRun(DikteTest):
         self.assertFalse(ggml.whisper.settings()["gpu"])
         self.assertEqual(ggml.llm.settings()["context"], 4096)
 
+    def test_the_custom_models_directory_reaches_ggml(self):
+        custom = self.path("ASCII-models")
+        conf = self.config(local_models_dir=str(custom))
+        conf.apply_local()
+        self.assertEqual(ggml.MODELS_DIR, custom)
+
     def test_the_processing_device_reaches_the_whisper_server(self):
         identifier = "vulkan:00112233445566778899aabbccddeeff"
         conf = self.config(local_device=identifier)
