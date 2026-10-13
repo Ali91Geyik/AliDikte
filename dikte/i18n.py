@@ -172,6 +172,10 @@ TR = {
     "Discarded a stock phrase: “{text}”": "Kalıp cümle atıldı: “{text}”",
     "Discard stock phrases models invent for near-silent audio":
         "Sessize yakın seste modelin uydurduğu kalıp cümleleri at",
+    "Play audio cues when recording changes":
+        "Kayıt durumu değiştiğinde sesli uyarı çal",
+    "A short pattern marks recording start, stop, completion and failure.":
+        "Kısa bir ses deseni kaydın başlamasını, bitmesini, tamamlanmasını ve başarısız olmasını belirtir.",
     "Whisper answers silence with things like “Thanks for watching”.":
         "Whisper sessizliğe “Altyazı M.K.” gibi şeylerle karşılık verir.",
     "Speech also has to rise {margin} dB above the recording's own noise "

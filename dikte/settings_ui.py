@@ -1343,6 +1343,12 @@ class SettingsWindow(QDialog):
         )
         form.addRow("", self.filter_hallucinations)
 
+        self.audio_cues = QCheckBox(t("Play audio cues when recording changes"))
+        self.audio_cues.setToolTip(t(
+            "A short pattern marks recording start, stop, completion and failure."
+        ))
+        form.addRow("", self.audio_cues)
+
         self.keep_audio = QCheckBox(
             t("Keep audio files ({path})", path=str(cfg.RECORDINGS_DIR))
         )
@@ -2485,6 +2491,7 @@ class SettingsWindow(QDialog):
         self.skip_silent.setChecked(conf["skip_silent"])
         self.silence_db.setValue(int(conf["silence_db"]))
         self.filter_hallucinations.setChecked(conf["filter_hallucinations"])
+        self.audio_cues.setChecked(conf["audio_cues"])
         self.keep_audio.setChecked(conf["keep_audio"])
         self.update_check.setChecked(conf["update_check"])
         self.start_in_tray.setChecked(conf["start_in_tray"])
@@ -2643,6 +2650,7 @@ class SettingsWindow(QDialog):
         conf["skip_silent"] = self.skip_silent.isChecked()
         conf["silence_db"] = float(self.silence_db.value())
         conf["filter_hallucinations"] = self.filter_hallucinations.isChecked()
+        conf["audio_cues"] = self.audio_cues.isChecked()
         conf["keep_audio"] = self.keep_audio.isChecked()
         conf["update_check"] = self.update_check.isChecked()
         conf["start_in_tray"] = self.start_in_tray.isChecked()

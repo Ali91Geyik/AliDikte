@@ -513,6 +513,7 @@ DEFAULTS = {
     "speech_margin_db": 10.0,     # how far speech must rise above the noise floor
     "min_voiced_seconds": 0.3,
     "filter_hallucinations": True,
+    "audio_cues": False,
     # Ctrl+Space everywhere except a Mac, where macOS itself holds it for the
     # input-source switch and Cmd+Space for Spotlight: neither is ours to take,
     # so there Dikte starts on a combination a stock system leaves free.
