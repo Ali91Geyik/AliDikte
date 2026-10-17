@@ -1506,6 +1506,11 @@ class LocalModels(DikteTest):
         # "nothing can transcribe" question from its real binary and model.
         self.patch_attr(ggml, "BIN_DIR", self.path("bin"))
         self.patch_attr(ggml, "MODELS_DIR", self.path("models"))
+        # And one with ffmpeg on it would run a real device listing while the
+        # window is built, whose reader threads then collide with the tests
+        # that stand in for threading.Thread.
+        self.enterContext(mock.patch.object(audio, "list_sources",
+                                            return_value=[]))
         # And one with Codex on it would ask it for its model list.
         self.enterContext(mock.patch.object(settings_ui.SettingsWindow,
                                             "_load_codex_models"))
