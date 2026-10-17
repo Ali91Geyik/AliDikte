@@ -322,6 +322,8 @@ def cmd_transcribe(opts):
         worker.start(path, timestamps, _pick(opts.cleanup, conf["file_cleanup"]))
 
     result = _headless(begin, on_interrupt=worker.stop)
+    # Finished is emitted before the worker removes its converted audio.
+    worker.wait(10)
     if result.get("error"):
         return fail(opts, result["error"])
 

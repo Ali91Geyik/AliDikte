@@ -1132,6 +1132,19 @@ class TranscribeRunsHere(DikteTest):
 
         self.assertEqual(ggml.whisper.settings()["model"], "ggml-base.bin")
 
+    def test_the_worker_is_let_finish_its_cleanup_before_exit(self):
+        # Finished arrives before the worker removes its scratch audio, and its
+        # thread is a daemon: exiting straight away left the directory behind.
+        wav = self.path("clip.wav")
+        wav.write_bytes(b"RIFF not really audio")
+        opts = cli.build_parser().parse_args(["transcribe", str(wav)])
+        with mock.patch.object(cli.filetranscribe, "FileTranscriber") as worker, \
+                mock.patch.object(cli, "_headless",
+                                  return_value={"error": "stopped"}), \
+                captured():
+            cli.cmd_transcribe(opts)
+        worker.return_value.wait.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
