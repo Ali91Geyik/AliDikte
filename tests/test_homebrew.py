@@ -156,6 +156,12 @@ class HomebrewDiscovery(unittest.TestCase):
                 ggml.program_path(ggml.LLAMA), "/managed/whisper-server"
             )
 
+    def test_a_rosetta_python_finds_the_apple_silicon_install(self):
+        # Under Rosetta platform.machine() says x86_64 on an arm64 Mac.
+        native = "/opt/homebrew/opt/whisper.cpp/bin/whisper-server"
+        with self.machine(arch="x86_64", files=(native,)):
+            self.assertEqual(ggml.program_path(ggml.WHISPER), native)
+
     def test_unknown_architecture_does_not_guess_a_prefix(self):
         current = "/opt/homebrew/opt/whisper.cpp/bin/whisper-server"
         with self.machine(arch="unknown", files=(current,)):

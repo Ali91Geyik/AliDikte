@@ -623,21 +623,31 @@ _HOMEBREW_PREFIXES = (pathlib.Path("/opt/homebrew"), pathlib.Path("/usr/local"))
 
 
 def _macos_homebrew_program(program):
-    """Find Homebrew whisper-server outside a shell PATH."""
+    """Find Homebrew whisper-server outside a shell PATH.
+
+    The formula passes WHISPER_BUILD_SERVER=OFF, but whisper.cpp 1.9.5 builds
+    and installs the server with the examples regardless. Should a later
+    release honour that flag again, the formula stops shipping the server and
+    this finds nothing.
+    """
     if sys.platform != "darwin" or program is not WHISPER:
         return ""
     arch = platform.machine().lower()
     if arch in ("arm64", "aarch64"):
-        prefix = "/opt/homebrew"
+        prefixes = _HOMEBREW_PREFIXES
     elif arch in ("x86_64", "amd64"):
-        prefix = "/usr/local"
+        # Intel's prefix first. A Python under Rosetta also says x86_64 on an
+        # Apple silicon Mac, whose Homebrew lives in the other one.
+        prefixes = _HOMEBREW_PREFIXES[::-1]
     else:
         return ""
-    # This is a macOS path even when a cross-platform test stands on Darwin
-    # from a Windows runner, where os.path would otherwise insert backslashes.
-    candidate = f"{prefix}/opt/whisper.cpp/bin/{program.binary}"
-    return (candidate if os.path.isfile(candidate)
-            and os.access(candidate, os.X_OK) else "")
+    for prefix in prefixes:
+        # A macOS path even when a cross-platform test stands on Darwin from a
+        # Windows runner, where os.path would otherwise insert backslashes.
+        candidate = f"{prefix.as_posix()}/opt/whisper.cpp/bin/{program.binary}"
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return ""
 
 
 def homebrew_version(program, path):
