@@ -625,6 +625,15 @@ def _macos_restore(snapshot):
     finally:
         shutil.rmtree(snapshot.directory, ignore_errors=True)
 
+def _clipboard_environment():
+    """pbcopy and pbpaste take their text encoding from the locale. An app
+    started from Finder or launchd has none, and they then fall back to the
+    system's legacy encoding: UTF-8 goes in and "ç" comes out as "√ß"."""
+    if desktop() is MACOS:
+        return dict(os.environ, LC_ALL="en_US.UTF-8")
+    return None
+
+
 def read_clipboard():
     here = desktop()
     if here is WINDOWS:
@@ -637,7 +646,8 @@ def read_clipboard():
     if not shutil.which(here.read_command[0]):
         return None
     try:
-        res = subprocess.run(here.read_command, capture_output=True, timeout=5)
+        res = subprocess.run(here.read_command, capture_output=True, timeout=5,
+                             env=_clipboard_environment())
     except (subprocess.SubprocessError, OSError):
         return None
     return res.stdout if res.returncode == 0 else None
@@ -652,6 +662,7 @@ def _run_copy(payload):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=10,
+        env=_clipboard_environment(),
     )
 
 
