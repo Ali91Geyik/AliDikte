@@ -94,8 +94,9 @@ Python refuses to be installed into, and `DIKTE_PYTHON=…/venv/bin/python
 ./install.sh` points the installer at a virtualenv instead.
 
 Local speech to text needs whisper.cpp's server, which `brew install
-whisper.cpp` installs, and Dikte finds it even when started from the Finder. A meeting
-needs BlackHole or Loopback (`brew install blackhole-2ch`); dictation does not.
+whisper.cpp` installs, and Dikte finds it even when started from the Finder.
+A meeting needs BlackHole or Loopback (`brew install blackhole-2ch`); dictation
+does not.
 
 Windows works the same way, holding the keys through the system's own hotkey
 service while Dikte runs. The setup on the releases page carries the ffmpeg

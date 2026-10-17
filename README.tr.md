@@ -92,7 +92,8 @@ kurulmayı reddediyor; sanal ortam kullanacaksan
 `DIKTE_PYTHON=…/venv/bin/python ./install.sh`.
 
 Yerel transkripsiyon için whisper.cpp'nin sunucusu gerekiyor, onu
-`brew install whisper.cpp` kuruyor ve Dikte Finder'dan açılsa bile buluyor. Toplantı için BlackHole veya Loopback gerekiyor
+`brew install whisper.cpp` kuruyor ve Dikte Finder'dan açılsa bile buluyor.
+Toplantı için BlackHole veya Loopback gerekiyor
 (`brew install blackhole-2ch`); dikte için gerekmiyor.
 
 Windows da aynı şekilde çalışıyor, Dikte açıkken kombinasyonu sistemin kendi
