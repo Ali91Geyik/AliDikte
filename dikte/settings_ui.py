@@ -2828,7 +2828,6 @@ class SettingsWindow(QDialog):
                                 t("Could not save the settings: {error}",
                                   error=exc))
             return
-        ggml.set_models_dir(conf["local_models_dir"])
         # A lowered limit should bite now, not on the next dictation.
         try:
             cfg.trim_history(conf["history_limit"])
