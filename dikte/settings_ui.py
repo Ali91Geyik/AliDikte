@@ -1505,6 +1505,18 @@ class SettingsWindow(QDialog):
             ggml.whisper_models, ggml.whisper_model_path)
         stt_form.addRow(self.local_whisper)
 
+        self.local_models_dir = QLineEdit()
+        self.local_models_dir.setPlaceholderText(str(ggml.DATA_DIR / "models"))
+        self.local_models_dir.setToolTip(t(
+            "The folder shared by the local whisper and llama models. Choose "
+            "an ASCII-only path on Windows if your user folder contains "
+            "characters whisper.cpp cannot open. Empty uses the default."
+        ))
+        choose_models_dir = QPushButton(t("Choose…"))
+        choose_models_dir.clicked.connect(self._choose_models_dir)
+        stt_form.addRow(t("Model folder"), self._row(
+            self.local_models_dir, choose_models_dir))
+
         self.local_device = QComboBox()
         self.local_device.addItem(t("Automatic (whisper.cpp default)"), "auto")
         self.local_device.addItem(t("Processor (CPU)"), "cpu")
@@ -2539,6 +2551,7 @@ class SettingsWindow(QDialog):
             )
         self._select_data(self.local_device, processing_device)
         self._processing_device_changed()
+        self.local_models_dir.setText(conf["local_models_dir"])
         self.local_preload.setChecked(conf["local_preload"])
         saved_threads = cfg._local_thread_count(conf["local_threads"])
         self.local_threads.setValue(min(saved_threads, self.local_threads.maximum()))
@@ -2692,6 +2705,7 @@ class SettingsWindow(QDialog):
         conf["opencode_api_key"] = self.opencode_key.text().strip()
         conf["local_binary"] = self.local_whisper.custom_binary
         conf["local_llm_binary"] = self.local_llm.custom_binary
+        conf["local_models_dir"] = self.local_models_dir.text().strip()
         conf["local_model"] = self.local_whisper.selected()
         conf["local_device"] = self.local_device.currentData() or "auto"
         conf["local_gpu"] = conf["local_device"] != "cpu"
@@ -3664,6 +3678,14 @@ class SettingsWindow(QDialog):
         )
         if chosen:
             self.assistant_dir.setText(chosen)
+
+    def _choose_models_dir(self):
+        chosen = QFileDialog.getExistingDirectory(
+            self, t("Model folder"),
+            self.local_models_dir.text().strip() or str(ggml.DATA_DIR / "models"),
+        )
+        if chosen:
+            self.local_models_dir.setText(chosen)
 
     # ---- minutes ---------------------------------------------------------
 
