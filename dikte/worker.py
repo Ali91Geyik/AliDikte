@@ -43,6 +43,18 @@ RETRY_WAITS = (10, 30, 60, 120)
 _paste_lock = threading.Lock()
 
 
+def is_kept_recording(path):
+    """Whether `path` is a WAV the chain kept in the recordings directory.
+
+    A retry uploads the file and then deletes or moves it, so a history row
+    edited to point anywhere else must come to nothing."""
+    if not path or not str(path).lower().endswith(".wav"):
+        return False
+    real = os.path.realpath(path)
+    return (os.path.dirname(real) == os.path.realpath(cfg.RECORDINGS_DIR)
+            and os.path.isfile(real))
+
+
 class Pipeline(QObject):
     stage = pyqtSignal(str)          # human-readable progress line
     finished = pyqtSignal(str, str, str, str)  # raw, final text, warning, language
@@ -61,13 +73,17 @@ class Pipeline(QObject):
         self._jobs = collections.deque()
         self._draining = False
         self._jobs_lock = threading.Lock()
+        # Kept recordings with a retry queued or running. Two clicks on Retry
+        # must not send one file twice: the first run moves or deletes it, and
+        # the second would fail on a file that is no longer there.
+        self._retrying = set()
 
     @property
     def busy(self):
         return self._thread is not None and self._thread.is_alive()
 
     def run(self, wav_path, duration, rms_values=(), ask=False, paste=None,
-            focus=None):
+            focus=None, retry=None):
         """`paste` overrides the setting for this one run, which is what a
         dictation asked for from a terminal wants: the text comes back down the
         socket, and pasting it into whatever had focus is nobody's intention.
@@ -78,10 +94,18 @@ class Pipeline(QObject):
         A run started while one is going waits its turn rather than being
         dropped: the next dictation can be spoken while the last one is still
         being cleaned up, and each one is finished, pasted and reported in the
-        order it was spoken."""
+        order it was spoken.
+
+        `retry` is the history row of a failed dictation whose kept recording
+        `wav_path` is. Its outcome takes that row's place rather than adding a
+        new one. False when that recording is already being retried."""
         with self._jobs_lock:
+            if retry is not None:
+                if wav_path in self._retrying:
+                    return False
+                self._retrying.add(wav_path)
             self._jobs.append((wav_path, duration, list(rms_values), ask, paste,
-                               focus))
+                               focus, retry))
             if self._draining:
                 return
             self._draining = True
@@ -96,7 +120,11 @@ class Pipeline(QObject):
                     self._draining = False
                     return
                 job = self._jobs.popleft()
-            self._work(*job)
+            try:
+                self._work(*job)
+            finally:
+                with self._jobs_lock:
+                    self._retrying.discard(job[0])
 
     def cancel(self):
         """Give up on a job already under way.
@@ -139,14 +167,24 @@ class Pipeline(QObject):
                 self.stage.emit(stage)
 
     def _work(self, wav_path, duration, rms_values, ask, paste_override=None,
-              focus=None):
+              focus=None, retry=None):
         conf = self.conf
         started = time.monotonic()
         raw = ""
+        # The row this run has written, so a failure after it (the clipboard
+        # refusing the text) does not add a second, failed row for the same
+        # dictation.
+        written = None
+
+        if retry is not None and not is_kept_recording(wav_path):
+            self.failed.emit(t("The recording is no longer there: {path}",
+                               path=wav_path))
+            return
 
         # Room tone only: don't spend an API call, and don't invite a
-        # hallucinated sentence back.
-        if conf["skip_silent"]:
+        # hallucinated sentence back. A retry has no levels to judge by, and
+        # its recording passed this check the first time.
+        if conf["skip_silent"] and retry is None:
             stats = vad.analyse(rms_values, CHUNK_SECONDS, conf["speech_margin_db"])
             if vad.is_silent(stats, conf["silence_db"], conf["speech_margin_db"],
                              conf["min_voiced_seconds"]):
@@ -185,8 +223,15 @@ class Pipeline(QObject):
                 detected = ""
 
             if conf["filter_hallucinations"] and vad.looks_like_hallucination(raw, duration):
+                message = t("Discarded a stock phrase: “{text}”", text=raw[:60])
+                if retry is not None:
+                    # Asked for by hand, on a recording the user wanted back:
+                    # it stays, and so does its row, now saying why.
+                    self.failed.emit(self._give_up(wav_path, message, duration,
+                                                   target.model, retry))
+                    return
                 self._discard(wav_path)
-                self.failed.emit(t("Discarded a stock phrase: “{text}”", text=raw[:60]))
+                self.failed.emit(message)
                 return
 
             text = raw
@@ -248,7 +293,13 @@ class Pipeline(QObject):
                 "raw": raw,
                 "text": text,
             }
-            cfg.append_history(record)
+            if retry is not None:
+                # Listed where it was spoken, not where it was retried.
+                record["ts"] = retry.get("ts") or record["ts"]
+                written = cfg.replace_history(retry, record)
+            if written is None:
+                cfg.append_history(record)
+                written = record
             try:
                 cfg.trim_history(conf["history_limit"])
             except OSError as exc:
@@ -276,6 +327,7 @@ class Pipeline(QObject):
                         # has to be told what the paste then did.
                         record = cfg.amend_history(
                             record, cleanup_error=warning) or record
+                        written = record
                 if previous is not None:
                     # Let the focused application consume the temporary
                     # transcription before putting every old clipboard type
@@ -289,13 +341,56 @@ class Pipeline(QObject):
             self.cancelled.emit()
         except (api.ApiError, paste.PasteError, assistant.AssistantError) as exc:
             print(f"dikte: {exc}", file=sys.stderr)
-            self.failed.emit(self._keeping(wav_path, str(exc)))
+            self.failed.emit(self._failure(wav_path, str(exc), duration, ask,
+                                           written, retry))
         except Exception as exc:  # never fail silently
             traceback.print_exc()
-            self.failed.emit(self._keeping(wav_path, t("Unexpected error: {error}",
-                                                       error=exc)))
+            self.failed.emit(self._failure(
+                wav_path, t("Unexpected error: {error}", error=exc), duration,
+                ask, written, retry))
         finally:
-            self._discard(wav_path)
+            # A retry that did not get its transcript into the history leaves
+            # its recording alone: when the move to a new name failed, the file
+            # where it is now is the only copy of the speech.
+            if retry is None or written is not None:
+                self._discard(wav_path)
+
+    def _failure(self, wav_path, message, duration, ask, written, retry):
+        """The message for a failed run, its audio kept and, for a dictation
+        that left no row of its own, a failed row the history can retry."""
+        if ask or written is not None:
+            return self._keeping(wav_path, message)[0]
+        try:
+            model = self.conf.transcribe_target().model
+        except Exception:  # the settings themselves may be what failed
+            model = ""
+        return self._give_up(wav_path, message, duration, model, retry)
+
+    def _give_up(self, wav_path, message, duration, model, retry):
+        """Keep the audio and record the dictation as failed, so the history
+        shows it with a way to try again. A retry that failed once more updates
+        its own row instead of adding another."""
+        message, kept = self._keeping(wav_path, message)
+        if not kept:
+            return message
+        record = {
+            "ts": (retry or {}).get("ts") or time.strftime("%Y-%m-%d %H:%M:%S"),
+            "duration": round(duration, 1),
+            "model": model,
+            "mode": "",
+            "failed": True,
+            "error": message.splitlines()[0] if message else "",
+            "audio": kept,
+            "raw": "",
+            "text": "",
+        }
+        try:
+            if retry is None or cfg.replace_history(retry, record) is None:
+                cfg.append_history(record)
+                cfg.trim_history(self.conf["history_limit"])
+        except OSError as exc:
+            print(f"dikte: could not record the failure: {exc}", file=sys.stderr)
+        return message
 
     def _keeping(self, wav_path, message):
         """Put the failed run's audio somewhere a retry can find it.
@@ -303,12 +398,14 @@ class Pipeline(QObject):
         A dictation that died on the way to the model is speech the user cannot
         say again from memory; deleting it because a server was down turns one
         failure into two. Kept regardless of the keep_audio setting, which is
-        about the runs that succeeded.
+        about the runs that succeeded. The message and the kept path, '' when
+        the move failed.
         """
         kept = self._keep(wav_path)
         if not kept:
-            return message
-        return message + "\n" + t("The recording was kept: {path}", path=kept)
+            return message, ""
+        return (message + "\n" + t("The recording was kept: {path}", path=kept),
+                kept)
 
     def _keep(self, wav_path):
         """Move the WAV into the recordings directory; its new path, or ''."""
@@ -331,6 +428,10 @@ class Pipeline(QObject):
         if not os.path.exists(wav_path):
             return
         if self.conf["keep_audio"]:
+            # A retried recording is already where kept audio lives.
+            if os.path.dirname(os.path.realpath(wav_path)) == \
+                    os.path.realpath(cfg.RECORDINGS_DIR):
+                return
             if self._keep(wav_path):
                 return
             # The move failing is no reason to delete what the user asked to

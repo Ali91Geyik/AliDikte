@@ -760,6 +760,33 @@ class Settings(DikteTest):
         self.window(cfg.Config())._save()
         self.assertEqual(len(cfg.read_history()), 3)
 
+    def test_a_failed_dictation_can_be_retried_from_the_history(self):
+        cfg.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+        kept = cfg.RECORDINGS_DIR / "20261006-101010.wav"
+        kept.write_bytes(b"RIFF")
+        failed = {"ts": "then", "duration": 2.0, "failed": True,
+                  "error": "server down", "audio": str(kept), "text": ""}
+        cfg.append_history({"ts": "earlier", "text": "fine"})
+        cfg.append_history(failed)
+        window = self.window(cfg.Config())
+        asked = []
+        window.retry_requested.connect(asked.append)
+        self.assertIn("server down", window.history.item(0).text())
+        window.history.item(1).setSelected(True)
+        self.assertFalse(window.history_retry.isEnabled())
+        window.history.item(0).setSelected(True)
+        self.assertTrue(window.history_retry.isEnabled())
+        window.history_retry.click()
+        self.assertEqual(asked, [failed])
+        self.assertFalse(window.history_retry.isEnabled())
+
+    def test_a_failed_row_whose_recording_is_gone_offers_no_retry(self):
+        cfg.append_history({"ts": "then", "failed": True, "error": "down",
+                            "audio": str(cfg.RECORDINGS_DIR / "gone.wav")})
+        window = self.window(cfg.Config())
+        window.history.item(0).setSelected(True)
+        self.assertFalse(window.history_retry.isEnabled())
+
     def test_saving_tells_whoever_is_listening(self):
         conf = cfg.Config()
         window = self.window(conf)

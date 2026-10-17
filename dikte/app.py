@@ -8,6 +8,7 @@ command line says "there is no instance to talk to, so be one".
 Nothing runs this file directly; __main__.py is what the launchers start.
 """
 
+import collections
 import contextlib
 import ctypes
 import ctypes.util
@@ -159,6 +160,11 @@ class Dikte:
         # cleaned up, so the next dictation can already be spoken, and it then
         # queues up behind the one still going.
         self._transcripts_pending = 0
+        # Which of those are retries from the history, in queue order. The
+        # pipeline finishes runs in the order they were queued, so the front of
+        # this queue says whether the run that just settled was one. A retry
+        # answers nobody waiting on a dictation of their own.
+        self._queued_retries = collections.deque()
         # The application that was in front when the recording started, which
         # is where the transcript is meant to go, and the timer watching for
         # the moment it has to be put back there. macOS only; see
@@ -1114,8 +1120,28 @@ class Dikte:
                                   paste=wants_paste, focus=focus)
         else:
             self._transcripts_pending += 1
+            self._queued_retries.append(False)
             self.pipeline.run(wav_path, duration, rms_values,
                               paste=wants_paste, focus=focus)
+
+    def retry_dictation(self, row):
+        """Send a failed dictation's kept recording through the chain again.
+
+        Asked for from the history, so the result goes to the clipboard and
+        nowhere else: the window in front is Dikte's own, and pasting into it
+        is nobody's intention.
+        """
+        self._transcripts_pending += 1
+        self._queued_retries.append(True)
+        queued = self.pipeline.run(row.get("audio") or "",
+                                   float(row.get("duration") or 0),
+                                   paste=False, retry=row)
+        if queued is False:
+            self._transcripts_pending -= 1
+            self._queued_retries.pop()
+            return
+        if self.state != RECORDING:
+            self._set_state(BUSY)
 
     def _on_ask_stage(self, message):
         if isinstance(getattr(self, "home_messages", None), dict):
@@ -1138,9 +1164,19 @@ class Dikte:
         last of them, and an earlier run's result would be the wrong answer.
         """
         self._transcripts_pending -= 1
+        queue = getattr(self, "_queued_retries", None)
+        retried = queue.popleft() if queue else False
         if self.state != RECORDING:
             self._set_state(BUSY if self._transcripts_pending else IDLE)
-        if not self._transcripts_pending:
+        # A failed run is now a row in the history, and a retried one has
+        # changed its row; a list on screen would otherwise still offer the
+        # retry. A hidden one is read afresh when it is next shown.
+        window = getattr(self, "settings_window", None)
+        if window is not None and window.history.isVisible():
+            window._load_history()
+        if retried:
+            self._home_settled(DICTATION, payload)
+        elif not self._transcripts_pending - sum(queue or ()):
             self._settle(DICTATION, payload)
 
     def _on_finished(self, _raw, text, warning, speech_language):
@@ -1329,6 +1365,7 @@ class Dikte:
         self.settings_window.applied.connect(self._apply_settings)
         self.settings_window.language_changed.connect(self._reopen_settings)
         self.settings_window.update_found.connect(self._found_update)
+        self.settings_window.retry_requested.connect(self.retry_dictation)
         self.settings_window.finished.connect(self._settings_closed)
 
     def _settings_closed(self, *_):
