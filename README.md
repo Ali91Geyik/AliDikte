@@ -125,8 +125,8 @@ paste the raw transcript.
 
 | Task | Hosted providers | Other options |
 | --- | --- | --- |
-| Speech to text | OpenAI, Groq, OpenRouter, Requesty | Local model |
-| Cleanup | OpenRouter, Requesty, Google AI Studio, DeepSeek, OpenCode Go | Local model; Claude Code, Codex or Antigravity CLI |
+| Speech to text | OpenAI, Groq, OpenRouter, Requesty, any OpenAI-compatible server | Local model |
+| Cleanup | OpenRouter, Requesty, Google AI Studio, DeepSeek, OpenCode Go, any OpenAI-compatible server | Local model; Claude Code, Codex or Antigravity CLI |
 
 Choose models and cleanup reasoning effort in Settings. API keys can be entered
 there too; empty keys fall back to `OPENAI_API_KEY`, `GROQ_API_KEY`,

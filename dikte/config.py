@@ -438,6 +438,12 @@ DEFAULTS = {
     "deepseek_base_url": "https://api.deepseek.com",
     "opencode_api_key": "",
     "opencode_base_url": "https://opencode.ai/zen/go/v1",
+    # A server of the user's own that speaks OpenAI's API: whisper or a chat
+    # model behind /audio/transcriptions and /chat/completions. No address
+    # ships with it, and the key is optional because a server on the same
+    # network often asks for none.
+    "custom_api_key": "",
+    "custom_base_url": "",
     "transcribe_provider": "local",  # "local", or a key of TRANSCRIBERS
     "transcribe_model": "gpt-4o-transcribe",           # used when provider is openai
     "groq_transcribe_model": "whisper-large-v3-turbo",
@@ -446,6 +452,7 @@ DEFAULTS = {
     # there returns segment times. Empty -> openai/whisper-1.
     "openrouter_file_model": "",
     "requesty_transcribe_model": "openai/gpt-4o-transcribe",
+    "custom_transcribe_model": "",  # empty -> whatever the server serves
     # A stored language overrides this default. Hosted providers receive no
     # language hint in auto mode; local whisper also reports the detected code.
     "language": "auto",
@@ -478,6 +485,7 @@ DEFAULTS = {
     "cleanup_agy_model": "",           # empty -> whatever Antigravity is set to
     "cleanup_opencode_model": "deepseek-v4-flash",
     "cleanup_requesty_model": "google/gemini-3.5-flash-lite",
+    "cleanup_custom_model": "",     # empty -> whatever the server serves
     "cleanup_reasoning": "",        # empty -> whatever the model does by default
 
     # --- llama.cpp, on this machine -----------------------------------------
@@ -618,6 +626,8 @@ TRANSCRIBERS = {
                               "openrouter_base_url", "openrouter_transcribe_model"),
     "requesty": Transcriber("Requesty", "requesty_api_key",
                             "requesty_base_url", "requesty_transcribe_model"),
+    "custom": Transcriber("Custom server", "custom_api_key", "custom_base_url",
+                          "custom_transcribe_model"),
 }
 
 # One lock for the history file and the meeting index both, rather than one
@@ -752,6 +762,9 @@ class Config:
     def requesty_key(self):
         return self.api_key("requesty_api_key")
 
+    def custom_key(self):
+        return self.api_key("custom_api_key")
+
     def transcribe_target(self):
         """Key, endpoint and model for whichever provider does speech to text.
 
@@ -772,14 +785,21 @@ class Config:
             name = "openai"
         who = TRANSCRIBERS[name]
         file_model = self["openrouter_file_model"] if name == "openrouter" else ""
-        return api.Target(name, who.service, self.api_key(who.key),
-                          self[who.url], self[who.model], file_model.strip())
+        # t(): the custom server's name is a phrase rather than a brand, and is
+        # shown in the interface language like the rest of an error.
+        return api.Target(name, t(who.service), self.api_key(who.key),
+                          self[who.url].strip(), self[who.model].strip(),
+                          file_model.strip())
 
     def transcribe_ready(self):
         """Whether speech to text could run right now, without opening Settings."""
         if self["transcribe_provider"] == "local":
             return self.local_whisper_ready()
-        return bool(self.transcribe_target().api_key)
+        target = self.transcribe_target()
+        if target.provider == "custom":
+            # The address is what it cannot run without; a key is optional.
+            return bool(target.base_url)
+        return bool(target.api_key)
 
     def local_whisper_ready(self):
         return bool(ggml.program_path(ggml.WHISPER, self["local_binary"])

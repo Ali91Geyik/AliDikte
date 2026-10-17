@@ -215,6 +215,10 @@ TR = {
     # --- api errors ----------------------------------------------------
     "{service} API key is empty. Add it in Settings.":
         "{service} API anahtarı boş. Ayarlar'dan gir.",
+    "{service} address is empty. Add it in Settings.":
+        "{service} adresi boş. Ayarlar'dan gir.",
+    "{service} address must start with http:// or https://.":
+        "{service} adresi http:// ya da https:// ile başlamalı.",
     "Transcript came back empty.": "Transkript boş döndü.",
     "The cleanup model returned an empty reply.": "Temizleme modeli boş yanıt döndü.",
     "Could not connect: {reason}": "Bağlantı kurulamadı: {reason}",
@@ -322,6 +326,13 @@ TR = {
     "(falls back to DEEPSEEK_API_KEY)": "(boşsa DEEPSEEK_API_KEY kullanılır)",
     "(falls back to OPENCODE_API_KEY)": "(boşsa OPENCODE_API_KEY kullanılır)",
     "(falls back to REQUESTY_API_KEY)": "(boşsa REQUESTY_API_KEY kullanılır)",
+    "Custom server": "Özel sunucu",
+    "Custom server address": "Özel sunucu adresi",
+    "OpenAI-compatible, e.g. http://localhost:8000/v1":
+        "OpenAI uyumlu, örneğin http://localhost:8000/v1",
+    "Optional (falls back to CUSTOM_API_KEY)":
+        "İsteğe bağlı (boşsa CUSTOM_API_KEY kullanılır)",
+    "Empty: the server's default model": "Boş: sunucunun varsayılan modeli",
     "Test": "Test et",
     "Trying…": "Deneniyor…",
     "Runs on OpenRouter.": "OpenRouter üzerinde çalışır.",
@@ -329,6 +340,7 @@ TR = {
     "Runs on DeepSeek.": "DeepSeek üzerinde çalışır.",
     "Runs on OpenCode Go.": "OpenCode Go üzerinde çalışır.",
     "Runs on Requesty.": "Requesty üzerinde çalışır.",
+    "Runs on your custom server.": "Özel sunucunda çalışır.",
     "Connection works. {count} audio models visible.":
         "Bağlantı tamam. {count} ses modeli görünüyor.",
     "Connection works. {count} models visible.":

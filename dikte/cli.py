@@ -531,7 +531,8 @@ def cmd_history_clear(opts):
 # --- settings ---------------------------------------------------------------
 
 SECRET_KEYS = ("openai_api_key", "groq_api_key", "openrouter_api_key",
-               "gemini_api_key", "deepseek_api_key", "opencode_api_key", "requesty_api_key")
+               "gemini_api_key", "deepseek_api_key", "opencode_api_key", "requesty_api_key",
+               "custom_api_key")
 
 
 def _mask(key, value):
@@ -713,6 +714,9 @@ def cmd_models(opts):
         elif opts.provider == "requesty":
             models = api.requesty_models(conf.requesty_key(), conf["requesty_base_url"],
                                          transcription=opts.transcription)
+        elif opts.provider == "custom":
+            models = api.custom_models(conf.custom_key(), conf["custom_base_url"],
+                                       "Custom server", transcription=opts.transcription)
         else:
             who = cfg.TRANSCRIBERS[opts.provider]
             models = api.openai_models(conf.api_key(who.key), conf[who.url],
@@ -729,11 +733,20 @@ def cmd_test_key(opts):
     for name, who in cfg.TRANSCRIBERS.items():
         if opts.which not in (name, "all"):
             continue
+        if name == "custom" and opts.which == "all" and not conf[who.url].strip():
+            # Nobody has one until they type its address in; that is not a
+            # key that failed.
+            continue
         try:
             if name == "openrouter":
                 # The one key that also pays for cleanup, so it reports credit
                 # rather than a model count.
                 message = api.openrouter_key_status(conf.openrouter_key())
+            elif name == "custom":
+                # The key is optional there, so the address is what is tested.
+                count = len(api.custom_models(conf.custom_key(), conf[who.url],
+                                              who.service))
+                message = f"connection works, {count} models visible"
             else:
                 count = len(api.openai_models(conf.api_key(who.key), conf[who.url],
                                               who.service))
@@ -1017,6 +1030,9 @@ def cmd_doctor(opts):
     }.get(cleaner, ("", ""))
     if cleanup_service:
         cleanup_ready = bool(cleanup_key)
+    elif cleaner == "custom":
+        # A key is optional there; the address is what it cannot run without.
+        cleanup_ready = bool(conf["custom_base_url"].strip())
     elif cleaner == "local":
         cleanup_ready = conf.local_llm_ready()
     else:
@@ -1043,6 +1059,10 @@ def cmd_doctor(opts):
     if target.provider == "local":
         transcribe_line = (f"{'✓' if transcribe_ready else '✗'} {target.service}, "
                            f"transcribing on {target.model or 'no model yet'}")
+    elif target.provider == "custom":
+        transcribe_line = (f"{'✓' if transcribe_ready else '✗'} Custom server "
+                           f"{target.base_url or '(no address)'}, transcribing on "
+                           f"{target.model or 'its default model'}")
     else:
         transcribe_line = (f"{'✓' if transcribe_ready else '✗'} {target.service} "
                            f"key, transcribing on {target.model}")
@@ -1052,6 +1072,10 @@ def cmd_doctor(opts):
     elif cleaner == "local":
         cleanup_line = (f"{'✓' if cleanup_ready else '✗'} Local model, "
                         f"cleaning up on {conf['local_llm_model'] or 'no model yet'}")
+    elif cleaner == "custom":
+        cleanup_line = (f"{'✓' if cleanup_ready else '✗'} Custom server "
+                        f"{conf['custom_base_url'].strip() or '(no address)'}, cleaning up "
+                        f"on {conf['cleanup_custom_model'].strip() or 'its default model'}")
     else:
         # Cleanup on a CLI needs no key, so what is checked is the program.
         cleanup_line = (f"{'✓' if cleanup_ready else '✗'} "

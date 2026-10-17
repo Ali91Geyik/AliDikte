@@ -73,6 +73,8 @@ TRANSCRIBE_MODELS = {
         "openai/gpt-4o-transcribe", "openai/gpt-4o-mini-transcribe",
         "openai/whisper-1",
     ],
+    # Nothing to suggest for a server nobody else knows; Fetch asks it.
+    "custom": [],
 }
 CLEANUP_MODELS = [
     "google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite",
@@ -97,7 +99,7 @@ AGY_MODELS = [
 CLEANUP_PROVIDERS = [
     ("OpenRouter", "openrouter"), ("Google AI Studio", "gemini"),
     ("DeepSeek", "deepseek"), ("OpenCode Go", "opencode"), ("Requesty", "requesty"),
-    ("This machine (llama.cpp)", "local"), ("Claude Code", "claude"),
+    ("Custom server", "custom"), ("This machine (llama.cpp)", "local"), ("Claude Code", "claude"),
     ("Codex", "codex"), ("Antigravity", "agy"),
 ]
 # Cleaning up a sentence is the lightest thing either of them will ever be
@@ -979,6 +981,7 @@ class SettingsWindow(QDialog):
     _deepseek_models_loaded = pyqtSignal(list, str)
     _opencode_models_loaded = pyqtSignal(list, str)
     _requesty_models_loaded = pyqtSignal(list, str)
+    _custom_models_loaded = pyqtSignal(list, str)
     _transcribe_models_loaded = pyqtSignal(list, str)
     _codex_models_loaded = pyqtSignal(list)
     _agy_models_loaded = pyqtSignal(list)
@@ -1084,6 +1087,7 @@ class SettingsWindow(QDialog):
         self._codex_models_loaded.connect(self._on_codex_models_loaded)
         self._opencode_models_loaded.connect(self._on_opencode_models_loaded)
         self._requesty_models_loaded.connect(self._on_requesty_models_loaded)
+        self._custom_models_loaded.connect(self._on_custom_models_loaded)
         self._agy_models_loaded.connect(self._on_agy_models_loaded)
         self._hosted_models_loaded.connect(self._on_hosted_models_loaded)
         self._test_done.connect(self._on_test_done)
@@ -1463,6 +1467,15 @@ class SettingsWindow(QDialog):
         self.requesty_key = self._key_row(
             keys_form, "requesty", t("(falls back to REQUESTY_API_KEY)"),
             self._test_requesty)
+        # The one provider whose address is not known in advance, so it is the
+        # one with an address field; the others keep theirs in the config.
+        self.custom_url = QLineEdit()
+        self.custom_url.setPlaceholderText(
+            t("OpenAI-compatible, e.g. http://localhost:8000/v1"))
+        keys_form.addRow(t("Custom server address"), self.custom_url)
+        self.custom_key = self._key_row(
+            keys_form, "custom", t("Optional (falls back to CUSTOM_API_KEY)"),
+            self._test_custom, service=t("Custom server"))
         outer.addWidget(keys)
 
         stt = QGroupBox(t("Speech to text"))
@@ -1653,6 +1666,16 @@ class SettingsWindow(QDialog):
         self.cleanup_requesty_model_row = self._row(self.cleanup_requesty_model,
                                                     self.refresh_requesty_models)
         orr_form.addRow(t("Model"), self.cleanup_requesty_model_row)
+
+        self.cleanup_custom_model = QComboBox()
+        self.cleanup_custom_model.setEditable(True)
+        self.cleanup_custom_model.lineEdit().setPlaceholderText(
+            t("Empty: the server's default model"))
+        self.refresh_custom_models = QPushButton(t("Fetch model list"))
+        self.refresh_custom_models.clicked.connect(self._load_custom_models)
+        self.cleanup_custom_model_row = self._row(self.cleanup_custom_model,
+                                                  self.refresh_custom_models)
+        orr_form.addRow(t("Model"), self.cleanup_custom_model_row)
 
         self.cleanup_agy_model = QComboBox()
         self.cleanup_agy_model.setEditable(True)
@@ -2536,6 +2559,7 @@ class SettingsWindow(QDialog):
         self.gemini_key.setText(conf["gemini_api_key"])
         self.deepseek_key.setText(conf["deepseek_api_key"])
         self.opencode_key.setText(conf["opencode_api_key"])
+        self.custom_url.setText(conf["custom_base_url"])
         self._shown_provider = ""
         self._select_data(self.transcribe_provider, conf["transcribe_provider"])
         self._provider_changed()  # selecting index 0 fires no signal
@@ -2582,6 +2606,7 @@ class SettingsWindow(QDialog):
         )
         self.cleanup_opencode_model.setCurrentText(conf["cleanup_opencode_model"])
         self.cleanup_requesty_model.setCurrentText(conf["cleanup_requesty_model"])
+        self.cleanup_custom_model.setCurrentText(conf["cleanup_custom_model"])
         self._select_data(self.cleanup_provider, conf["cleanup_provider"])
         self._cleanup_provider_changed()  # selecting index 0 fires no signal
         self._select_data(self.cleanup_reasoning, conf["cleanup_reasoning"])
@@ -2703,6 +2728,7 @@ class SettingsWindow(QDialog):
         conf["gemini_api_key"] = self.gemini_key.text().strip()
         conf["deepseek_api_key"] = self.deepseek_key.text().strip()
         conf["opencode_api_key"] = self.opencode_key.text().strip()
+        conf["custom_base_url"] = self.custom_url.text().strip()
         conf["local_binary"] = self.local_whisper.custom_binary
         conf["local_llm_binary"] = self.local_llm.custom_binary
         conf["local_models_dir"] = self.local_models_dir.text().strip()
@@ -2743,6 +2769,9 @@ class SettingsWindow(QDialog):
             self.cleanup_requesty_model.currentText().strip()
             or cfg.DEFAULTS["cleanup_requesty_model"]
         )
+        # Empty is a choice here rather than a field left blank: the server's
+        # own model.
+        conf["cleanup_custom_model"] = self.cleanup_custom_model.currentText().strip()
         conf["cleanup_reasoning"] = self.cleanup_reasoning.currentData() or ""
         conf["local_llm_model"] = self.local_llm.selected()
         conf["local_llm_repo"] = self.local_llm.repository()
@@ -3003,6 +3032,8 @@ class SettingsWindow(QDialog):
         self.transcribe_model.clear()
         self.transcribe_model.addItems(TRANSCRIBE_MODELS[provider])
         self.transcribe_model.setCurrentText(self._models[provider])
+        self.transcribe_model.lineEdit().setPlaceholderText(
+            t("Empty: the server's default model") if provider == "custom" else "")
         if provider == "openrouter":
             self._fill_file_models(TRANSCRIBE_MODELS[provider])
         self.transcribe_status.setText("")
@@ -3019,13 +3050,16 @@ class SettingsWindow(QDialog):
         self.refresh_transcribe_models.setEnabled(False)
         self.transcribe_status.setText(t("Fetching model list…"))
         key, base = self._typed_key(provider)
-        service = cfg.TRANSCRIBERS[provider].service
+        service = t(cfg.TRANSCRIBERS[provider].service)
 
         def work():
             try:
-                models = (api.openrouter_models(key, transcription=True)
-                          if provider == "openrouter"
-                          else api.openai_models(key, base, service))
+                if provider == "openrouter":
+                    models = api.openrouter_models(key, transcription=True)
+                elif provider == "custom":
+                    models = api.custom_models(key, base, service, transcription=True)
+                else:
+                    models = api.openai_models(key, base, service)
                 self._transcribe_models_loaded.emit(models, "")
             except api.ApiError as exc:
                 self._transcribe_models_loaded.emit([], str(exc))
@@ -3206,6 +3240,31 @@ class SettingsWindow(QDialog):
             combo.addItems(models)
             combo.setCurrentText(current)
 
+    def _load_custom_models(self):
+        self.refresh_custom_models.setEnabled(False)
+        self.models_label.setText(t("Fetching model list…"))
+        key, base = self._typed_key("custom")
+        service = t("Custom server")
+
+        def work():
+            try:
+                self._custom_models_loaded.emit(api.custom_models(key, base, service), "")
+            except api.ApiError as exc:
+                self._custom_models_loaded.emit([], str(exc))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_custom_models_loaded(self, models, error):
+        self.refresh_custom_models.setEnabled(True)
+        if error:
+            self.models_label.setText(t("Could not fetch the list: {error}", error=error))
+            return
+        current = self.cleanup_custom_model.currentText()
+        self.cleanup_custom_model.clear()
+        self.cleanup_custom_model.addItems(models)
+        self.cleanup_custom_model.setCurrentText(current)
+        self.models_label.setText(t("{count} models loaded.", count=len(models)))
+
     def _load_agy_models(self):
         """Ask Antigravity which models it offers, off the interface thread.
 
@@ -3347,6 +3406,14 @@ class SettingsWindow(QDialog):
             count=len(api.openai_models(key, base, "Requesty")),
         ))
 
+    def _test_custom(self):
+        key, base = self._typed_key("custom")
+        service = t("Custom server")
+        self._test_key("custom", lambda: t(
+            "Connection works. {count} models visible.",
+            count=len(api.custom_models(key, base, service)),
+        ))
+
     def _typed_key(self, provider):
         """(key, base URL) for a provider, preferring what is in the field now."""
         if provider in cfg.TRANSCRIBERS:
@@ -3356,7 +3423,12 @@ class SettingsWindow(QDialog):
             key_setting = f"{provider}_api_key"
             url_setting = f"{provider}_base_url"
         typed = self._key_fields[provider].text().strip()
-        return typed or self.conf.api_key(key_setting), self.conf[url_setting]
+        base = self.conf[url_setting]
+        if provider == "custom":
+            # Its address has a field of its own, and what is typed there now
+            # is the server being asked about.
+            base = self.custom_url.text().strip()
+        return typed or self.conf.api_key(key_setting), base
 
     def _test_key(self, provider, ask):
         """Run `ask` off the interface thread and write its answer under the key.
@@ -3594,6 +3666,8 @@ class SettingsWindow(QDialog):
                                         provider == "opencode")
         self.cleanup_form.setRowVisible(self.cleanup_requesty_model_row,
                                         provider == "requesty")
+        self.cleanup_form.setRowVisible(self.cleanup_custom_model_row,
+                                        provider == "custom")
         self.cleanup_form.setRowVisible(self.cleanup_agy_model,
                                         provider == "agy")
         self.cleanup_form.setRowVisible(self.cleanup_reasoning,
@@ -3614,6 +3688,8 @@ class SettingsWindow(QDialog):
             self.models_label.setText(t("Runs on DeepSeek."))
         elif provider == "requesty":
             self.models_label.setText(t("Runs on Requesty."))
+        elif provider == "custom":
+            self.models_label.setText(t("Runs on your custom server."))
         elif not binary:
             self.models_label.setText(t("Runs on OpenRouter."))
         elif found:

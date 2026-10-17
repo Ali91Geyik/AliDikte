@@ -247,6 +247,24 @@ class TranscribeTarget(DikteTest):
         self.assertEqual(target.base_url, "https://router.requesty.ai/v1")
         self.assertEqual(target.model, "openai/gpt-4o-transcribe")
 
+    def test_a_custom_server_when_it_is_picked(self):
+        conf = self.config(transcribe_provider="custom",
+                           custom_base_url=" http://10.0.0.5:8000/v1 ",
+                           custom_transcribe_model="large-v3")
+        target = conf.transcribe_target()
+        self.assertEqual(target.provider, "custom")
+        self.assertEqual(target.service, "Custom server")
+        self.assertEqual(target.api_key, "")
+        self.assertEqual(target.base_url, "http://10.0.0.5:8000/v1")
+        self.assertEqual(target.model, "large-v3")
+
+    def test_a_custom_server_is_ready_on_its_address_alone(self):
+        """Its key is optional, so no key must not read as not set up."""
+        self.assertFalse(self.config(transcribe_provider="custom").transcribe_ready())
+        conf = self.config(transcribe_provider="custom",
+                           custom_base_url="http://localhost:8000/v1")
+        self.assertTrue(conf.transcribe_ready())
+
     def test_openrouter_carries_its_file_model(self):
         conf = self.config(transcribe_provider="openrouter",
                            openrouter_api_key="sk-or-test",

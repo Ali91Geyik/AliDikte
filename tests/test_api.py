@@ -1177,3 +1177,97 @@ class Diarize(DikteTest):
         cues = api.speaker_cues(data)
         self.assertEqual([(text, who) for _, _, text, who in cues],
                          [("Hello there.", "0"), ("Hi back", "1")])
+
+
+CUSTOM = api.Target("custom", "Custom server", "", "http://10.0.0.5:8000/v1", "large-v3")
+
+
+class CustomServer(DikteTest):
+    """A server of the user's own: a typed address, and a key only if it has one."""
+
+    def setUp(self):
+        super().setUp()
+        self.wav = str(self.path("clip.wav"))
+        os.makedirs(self.root, exist_ok=True)
+        with open(self.wav, "wb") as fh:
+            fh.write(b"RIFFfake")
+
+    def test_it_transcribes_without_a_key(self):
+        with fake_urlopen({"text": "hi"}) as calls:
+            self.assertEqual(api.transcribe(CUSTOM, self.wav, prompt="Dikte"), "hi")
+        self.assertEqual(calls[0].full_url,
+                         "http://10.0.0.5:8000/v1/audio/transcriptions")
+        self.assertIsNone(calls[0].get_header("Authorization"))
+        fields = multipart_fields(calls[0])
+        self.assertEqual(fields["model"], "large-v3")
+        self.assertIn("prompt", fields)
+
+    def test_a_key_is_sent_when_there_is_one(self):
+        with fake_urlopen({"text": "hi"}) as calls:
+            api.transcribe(CUSTOM._replace(api_key="secret"), self.wav)
+        self.assertEqual(calls[0].unredirected_hdrs.get("Authorization"),
+                         "Bearer secret")
+
+    def test_an_empty_model_is_left_out_for_the_server_to_pick(self):
+        with fake_urlopen({"text": "hi"}) as calls:
+            api.transcribe(CUSTOM._replace(model=""), self.wav)
+        self.assertNotIn("model", multipart_fields(calls[0]))
+
+    def test_timestamps_ask_for_the_model_it_was_set_to(self):
+        self.assertEqual(api.timestamp_model("custom", "large-v3"), "large-v3")
+        self.assertEqual(api.timestamp_model("custom", ""), "")
+
+    def test_an_address_is_required_and_has_to_be_http(self):
+        for address in ("", "   ", "file:///etc/passwd", "ftp://host/v1", "localhost:8000"):
+            with self.subTest(address=address), fake_urlopen({"text": "hi"}) as calls, \
+                    self.assertRaises(api.ApiError):
+                api.transcribe(CUSTOM._replace(base_url=address), self.wav)
+            self.assertEqual(calls, [])
+
+    def test_cleanup_needs_no_key_and_sends_the_flat_effort(self):
+        with fake_urlopen(chat_reply("Hello.")) as calls:
+            result = api.cleanup("uh, hello", "", "my-model", "rules",
+                                 reasoning="low", base_url="https://llm.example/v1",
+                                 provider="custom", service="Custom server")
+        self.assertEqual(result, "Hello.")
+        self.assertEqual(calls[0].full_url, "https://llm.example/v1/chat/completions")
+        self.assertIsNone(calls[0].get_header("Authorization"))
+        payload = sent_json(calls[0])
+        self.assertEqual(payload["model"], "my-model")
+        self.assertEqual(payload["reasoning_effort"], "low")
+        self.assertNotIn("reasoning", payload)
+
+    def test_only_the_three_common_rungs_reach_the_server(self):
+        for asked, sent in (("minimal", "low"), ("medium", "medium"),
+                            ("xhigh", "high"), ("max", "high"), ("none", None)):
+            with self.subTest(asked=asked), fake_urlopen(chat_reply("Hi.")) as calls:
+                api.cleanup("uh", "", "m", "rules", reasoning=asked,
+                            base_url="http://h/v1", provider="custom",
+                            service="Custom server")
+            self.assertEqual(sent_json(calls[0]).get("reasoning_effort"), sent)
+
+    def test_cleanup_leaves_an_empty_model_out(self):
+        with fake_urlopen(chat_reply("Hello.")) as calls:
+            api.cleanup("uh, hello", "", "", "rules", base_url="http://localhost:1/v1",
+                        provider="custom", service="Custom server")
+        self.assertNotIn("model", sent_json(calls[0]))
+
+    def test_cleanup_refuses_a_missing_address(self):
+        with fake_urlopen(chat_reply("Hello.")) as calls, \
+                self.assertRaises(api.ApiError):
+            api.cleanup("uh", "", "m", "rules", base_url="", provider="custom",
+                        service="Custom server")
+        self.assertEqual(calls, [])
+
+    def test_the_model_list_is_shown_whole_and_needs_no_key(self):
+        with fake_urlopen({"data": [{"id": "qwen3"}, {"id": "large-v3"}]}) as calls:
+            models = api.custom_models("", "http://localhost:8000/v1/", "Custom server")
+        self.assertEqual(models, ["large-v3", "qwen3"])
+        self.assertEqual(calls[0].full_url, "http://localhost:8000/v1/models")
+        self.assertIsNone(calls[0].get_header("Authorization"))
+
+    def test_the_speech_list_prefers_the_whisper_ones(self):
+        with fake_urlopen({"data": [{"id": "qwen3"}, {"id": "whisper-large-v3"}]}):
+            self.assertEqual(api.custom_models("", "http://h/v1", "Custom server",
+                                               transcription=True),
+                             ["whisper-large-v3"])
