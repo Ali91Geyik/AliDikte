@@ -93,13 +93,10 @@ itself while it runs. PyQt6 comes from brew rather than pip because Homebrew's
 Python refuses to be installed into, and `DIKTE_PYTHON=…/venv/bin/python
 ./install.sh` points the installer at a virtualenv instead.
 
-Local speech to text is the one piece that has to be built by hand there:
-whisper.cpp publishes no macOS binary and Homebrew's is configured with
-`WHISPER_BUILD_SERVER=OFF`, so it installs `whisper-cli` and not the server
-Dikte talks to. Build it (`cmake -B build -DWHISPER_BUILD_SERVER=ON
--DGGML_METAL=ON && cmake --build build -j`) and put `build/bin/whisper-server` in a directory on your `PATH`, or
-transcribe in the cloud. A meeting needs BlackHole or Loopback
-(`brew install blackhole-2ch`); dictation does not.
+Local speech to text needs whisper.cpp's server, which `brew install
+whisper.cpp` installs, and Dikte finds it even when started from the Finder.
+A meeting needs BlackHole or Loopback (`brew install blackhole-2ch`); dictation
+does not.
 
 Windows works the same way, holding the keys through the system's own hotkey
 service while Dikte runs. The setup on the releases page carries the ffmpeg

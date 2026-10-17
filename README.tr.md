@@ -91,14 +91,10 @@ tutar. PyQt6 pip'ten değil brew'dan geliyor, Homebrew'un Python'u içine
 kurulmayı reddediyor; sanal ortam kullanacaksan
 `DIKTE_PYTHON=…/venv/bin/python ./install.sh`.
 
-Orada elle derlenmesi gereken tek parça yerel transkripsiyon: whisper.cpp'nin
-macOS sürümü yok, Homebrew'unki de `WHISPER_BUILD_SERVER=OFF` ile derleniyor,
-yani `whisper-cli` kuruluyor, Dikte'nin konuştuğu sunucu değil. Kendin derle
-(`cmake -B build -DWHISPER_BUILD_SERVER=ON -DGGML_METAL=ON && cmake --build
-build -j`) ve `build/bin/whisper-server` dosyasını `PATH` üzerindeki bir dizine koy,
-ya da buluta çevir. Toplantı için
-BlackHole veya Loopback gerekiyor (`brew install blackhole-2ch`); dikte için
-gerekmiyor.
+Yerel transkripsiyon için whisper.cpp'nin sunucusu gerekiyor, onu
+`brew install whisper.cpp` kuruyor ve Dikte Finder'dan açılsa bile buluyor.
+Toplantı için BlackHole veya Loopback gerekiyor
+(`brew install blackhole-2ch`); dikte için gerekmiyor.
 
 Windows da aynı şekilde çalışıyor, Dikte açıkken kombinasyonu sistemin kendi
 kısayol servisi üzerinden tutuyor. Sürümler sayfasındaki kurulum kaydın
