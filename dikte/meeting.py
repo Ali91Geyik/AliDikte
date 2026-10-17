@@ -89,6 +89,11 @@ class MeetingPipeline(QObject):
     def stop(self):
         self._stop.set()
 
+    def wait(self, timeout=None):
+        """Let the run finish its cleanup; see FileTranscriber.wait."""
+        if self._thread is not None:
+            self._thread.join(timeout)
+
     def _check(self):
         if self._stop.is_set():
             raise Cancelled

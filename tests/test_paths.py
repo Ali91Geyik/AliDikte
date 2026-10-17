@@ -114,6 +114,13 @@ class ScratchDir(unittest.TestCase):
                                           "TMPDIR": "/somewhere"}):
             self.assertIsNone(paths.scratch_dir("linux"))
 
+    def test_an_unwritable_cache_falls_back_to_tempfile(self):
+        blocker = os.path.join(self.cache, "file")
+        open(blocker, "w").close()
+        with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": blocker,
+                                          "TMPDIR": ""}):
+            self.assertIsNone(paths.scratch_dir("linux"))
+
     def test_elsewhere_tempfile_decides(self):
         self.assertIsNone(paths.scratch_dir("darwin"))
         self.assertIsNone(paths.scratch_dir("win32"))

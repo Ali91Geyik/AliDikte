@@ -89,7 +89,10 @@ def scratch_dir(platform=None):
     if (platform or sys.platform) != "linux" or os.environ.get("TMPDIR"):
         return None
     work = cache_dir(platform) / "work"
-    work.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        work.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError:
+        return None     # an unwritable cache still leaves tempfile's default
     cutoff = time.time() - STALE_SCRATCH_SECONDS
     for old in work.iterdir():
         try:
