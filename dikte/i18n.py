@@ -899,7 +899,6 @@ TR = {
     "Local whisper": "Yerel whisper",
     "Local model": "Yerel model",
     "Model folder": "Model klasörü",
-    "Choose…": "Seç…",
     "The folder shared by the local whisper and llama models. Choose "
     "an ASCII-only path on Windows if your user folder contains "
     "characters whisper.cpp cannot open. Empty uses the default.":

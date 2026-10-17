@@ -751,6 +751,20 @@ class ReadyToRun(DikteTest):
         conf.apply_local()
         self.assertEqual(ggml.MODELS_DIR, custom)
 
+    def test_clearing_the_models_directory_goes_back_to_the_default(self):
+        self.config(local_models_dir=str(self.path("ASCII-models"))).apply_local()
+        self.config(local_models_dir="").apply_local()
+        self.assertEqual(ggml.MODELS_DIR, ggml.DATA_DIR / "models")
+
+    def test_moving_the_models_directory_stops_the_running_servers(self):
+        conf = self.config(local_models_dir=str(self.path("ASCII-models")))
+        with mock.patch.object(ggml.whisper, "stop") as whisper, \
+                mock.patch.object(ggml.llm, "stop") as llm:
+            conf.apply_local()
+            conf.apply_local()
+        whisper.assert_called_once_with()
+        llm.assert_called_once_with()
+
     def test_the_processing_device_reaches_the_whisper_server(self):
         identifier = "vulkan:00112233445566778899aabbccddeeff"
         conf = self.config(local_device=identifier)

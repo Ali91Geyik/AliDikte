@@ -792,8 +792,12 @@ class Config:
 
     def apply_local(self):
         """Hand the local settings to the servers, restarting what they change."""
-        if self["local_models_dir"]:
-            ggml.set_models_dir(self["local_models_dir"])
+        if ggml.set_models_dir(self["local_models_dir"]):
+            # The restart check compares model names, not where they are
+            # read from, so a server holding one from the old folder is
+            # stopped here; the next use starts it from the new one.
+            ggml.whisper.stop()
+            ggml.llm.stop()
         device = self["local_device"]
         if device == "auto" and not self["local_gpu"]:
             device = "cpu"

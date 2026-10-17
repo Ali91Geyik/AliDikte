@@ -421,6 +421,8 @@ def cmd_meetings_retry(opts):
         return fail(opts, "the application is already writing this one up")
 
     conf = cfg.Config()
+    # As in transcribe, a local server is handed its settings here.
+    conf.apply_local()
     pipeline = meeting.MeetingPipeline(conf)
 
     def start(finish):
@@ -961,6 +963,8 @@ def cmd_status(opts):
 def cmd_doctor(opts):
     """What the settings window checks behind its buttons, in one pass."""
     conf = cfg.Config()
+    # Where the local models are looked for is a setting too.
+    ggml.set_models_dir(conf["local_models_dir"])
     # The two the clipboard and the key press go through come out of the table
     # rather than being spelled here, because they are not the same pair on all
     # four systems: X11 pastes with xclip where Wayland pastes with wl-copy, a

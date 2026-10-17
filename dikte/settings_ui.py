@@ -2523,8 +2523,6 @@ class SettingsWindow(QDialog):
             )
         self._select_data(self.local_device, processing_device)
         self._processing_device_changed()
-        if conf["local_models_dir"]:
-            ggml.set_models_dir(conf["local_models_dir"])
         self.local_models_dir.setText(conf["local_models_dir"])
         self.local_preload.setChecked(conf["local_preload"])
         saved_threads = cfg._local_thread_count(conf["local_threads"])
