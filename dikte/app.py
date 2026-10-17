@@ -45,6 +45,7 @@ from . import assistant  # noqa: E402
 from . import audio  # noqa: E402
 from . import cli  # noqa: E402
 from . import config as cfg  # noqa: E402
+from . import cues  # noqa: E402
 from . import ggml  # noqa: E402
 from . import hotkey  # noqa: E402
 from . import hub  # noqa: E402
@@ -184,6 +185,7 @@ class Dikte:
                                    follow_pointer=self.conf["overlay_follows_pointer"],
                                theme_name=self.conf["theme"])
         self.recorder = audio.Recorder()
+        self.cues = cues.AudioCues()
         self.pipeline = Pipeline(self.conf)
         self.ask_pipeline = Pipeline(self.conf)
         self.meeting_recorder = audio.MeetingRecorder()
@@ -756,6 +758,7 @@ class Dikte:
         if not self.recorder.active:
             return
         self._set_state(RECORDING)
+        self.cues.play("start")
 
     def start_ask(self):
         if self.ask_state != IDLE or self.recording:
@@ -769,6 +772,7 @@ class Dikte:
         if not self.recorder.active:
             return
         self._set_ask_state(RECORDING)
+        self.cues.play("start")
 
     def _begin_recording(self, owner):
         """One microphone, so one of the two holds it at a time."""
@@ -856,6 +860,7 @@ class Dikte:
     def stop(self):
         if self.state != RECORDING:
             return
+        self.cues.play("stop")
         self.ticker.stop()
         self._clear_pause()
         self._set_state(BUSY)
@@ -867,6 +872,7 @@ class Dikte:
     def stop_ask(self):
         if self.ask_state != RECORDING:
             return
+        self.cues.play("stop")
         self.ticker.stop()
         self._clear_pause()
         self._set_ask_state(BUSY)
@@ -913,6 +919,7 @@ class Dikte:
         self.ticker.stop()
         self._clear_pause()
         self.recorder.cancel()
+        self.cues.play("failed")
         # The preference dies with the run it was given for.
         self.paste_override.pop(ASK if asking else DICTATION, None)
         self.recorder_owner = None
@@ -1198,6 +1205,7 @@ class Dikte:
             self.overlay.show_done(
                 t("Transcript ready: {preview}", preview=_preview(text))
             )
+        self.cues.play("done")
         self._transcript_settled({"ok": True, "text": text, "raw": _raw,
                                   "warning": warning,
                                   "speech_language": speech_language})
@@ -1221,12 +1229,14 @@ class Dikte:
             self.ask_overlay.show_done(
                 t("{name}: {preview}", name=agent, preview=_preview(text)), 6000
             )
+        self.cues.play("done")
         self._set_ask_state(IDLE)
         self._settle(ASK, {"ok": True, "answer": text, "question": _raw,
                            "warning": warning, "agent": agent,
                            "speech_language": speech_language})
 
     def _on_ask_cancelled(self):
+        self.cues.play("failed")
         self.ask_overlay.show_done(t("Stopped."), 2000)
         self._set_ask_state(IDLE)
         self._settle(ASK, {"ok": False, "cancelled": True, "error": "stopped"})
@@ -1240,6 +1250,7 @@ class Dikte:
 
     def _on_pipeline_failed(self, message):
         """A run the pipeline gave up on; whatever queued behind it still runs."""
+        self.cues.play("failed")
         if self.state == RECORDING:
             # The corner belongs to the new recording; the failure still has to
             # be seen somewhere.
@@ -1269,11 +1280,13 @@ class Dikte:
 
     def _on_error(self, message):
         """The recorder or the key listener failed; no run reached the pipeline."""
+        self.cues.play("failed")
         self._report(message, self.overlay)
         self._set_state(BUSY if self._transcripts_pending else IDLE)
         self._settle(DICTATION, {"ok": False, "error": message})
 
     def _on_ask_error(self, message):
+        self.cues.play("failed")
         self._report(message, self.ask_overlay)
         self._set_ask_state(IDLE)
         self._settle(ASK, {"ok": False, "error": message})
@@ -1467,6 +1480,7 @@ class Dikte:
             threading.Thread(target=warm, daemon=True).start()
 
     def _apply_settings(self):
+        self.cues.set_enabled(self.conf["audio_cues"])
         for indicator in (self.overlay, self.ask_overlay):
             indicator.set_theme(self.conf["theme"])
             indicator.corner = self.conf["overlay_corner"]

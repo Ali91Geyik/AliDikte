@@ -61,6 +61,7 @@ CHANGED = {
     "skip_silent": False,
     "silence_db": -42.0,
     "filter_hallucinations": False,
+    "audio_cues": True,
     "keep_audio": True,
     "start_in_tray": False,
     "openai_api_key": "sk-test-key",
