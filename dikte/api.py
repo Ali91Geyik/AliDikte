@@ -15,6 +15,10 @@ meeting transcript is built out of.
 
 What is on this machine has no key, and its base URL is not known until a server
 is up, which is the one thing this module has to fill in for it.
+
+A custom server is anything else that speaks the same two endpoints: the user's
+own API, a whisper server, vLLM, LiteLLM. Its address is typed in, its key may
+be empty, and it is sent nothing that belongs to one provider in particular.
 """
 
 import collections
@@ -28,6 +32,7 @@ import socket
 import sys
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from . import ggml
@@ -93,6 +98,23 @@ def diarize_model(target):
     return ""
 
 
+def custom_base(base_url, service):
+    """The custom server's address, refused unless it is plain HTTP(S).
+
+    It is typed in by hand, so an empty one is a setting not filled in yet, and
+    urllib would otherwise open a file:// or ftp:// address just as readily.
+    """
+    base = (base_url or "").strip()
+    if not base:
+        raise ApiError(t("{service} address is empty. Add it in Settings.",
+                         service=service))
+    parsed = urllib.parse.urlsplit(base)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ApiError(t("{service} address must start with http:// or https://.",
+                         service=service))
+    return base
+
+
 def timestamp_model(provider, selected="", file_model=""):
     """Which model answers with segment times.
 
@@ -104,7 +126,11 @@ def timestamp_model(provider, selected="", file_model=""):
     and several that do not, and a request to the wrong one gets a transcript
     with no segments in it, so the one to use is a setting of its own
     (`file_model`) and whisper-1 is only where that setting is left empty.
+    A custom server is asked for the model it was set to, which may be none:
+    there is no telling what else it serves.
     """
+    if provider == "custom":
+        return selected
     if provider in ("groq", "local"):
         return selected or "whisper-large-v3-turbo"
     if provider == "openrouter":
@@ -428,6 +454,8 @@ def _transcribe_request(target, audio_path, language, prompt, response_format,
         # bill running. Locally the only thing being spent is time.
         target = target._replace(base_url=serving(ggml.whisper))
         timeout = max(timeout, LOCAL_TIMEOUT)
+    elif target.provider == "custom":
+        target = target._replace(base_url=custom_base(target.base_url, target.service))
     elif not target.api_key:
         raise ApiError(t("{service} API key is empty. Add it in Settings.",
                          service=target.service))
@@ -775,6 +803,8 @@ GEMINI_EFFORT = {"none": "minimal", "xhigh": "high", "max": "high"}
 # Requesty reads OpenAI's flat field and passes OpenRouter's object by, and a
 # "minimal" there is refused with a 400, so it goes to the lowest rung it has.
 REQUESTY_EFFORT = {"minimal": "low"}
+# What a server of one's own is safest asked for: low, medium or high.
+CUSTOM_EFFORT = {"minimal": "low", "xhigh": "high", "max": "high"}
 
 
 def _thinking(payload, provider, reasoning):
@@ -810,6 +840,13 @@ def _thinking(payload, provider, reasoning):
     elif provider == "requesty":
         # Explicit Off must remain distinct from the model's default.
         payload["reasoning_effort"] = REQUESTY_EFFORT.get(reasoning, reasoning)
+    elif provider == "custom":
+        # OpenAI's own field, the one an OpenAI-compatible server is likeliest
+        # to know; OpenRouter's object would be an unknown parameter there.
+        # Only the three rungs every such server takes are sent, and Off is
+        # left to the server rather than spelled out as a word it may refuse.
+        if reasoning != "none":
+            payload["reasoning_effort"] = CUSTOM_EFFORT.get(reasoning, reasoning)
     elif reasoning != "none":
         # The thinking itself is never shown, so ask for it to be left out.
         payload["reasoning"] = {"effort": reasoning, "exclude": True}
@@ -874,7 +911,9 @@ def local_ceiling(text, reasoning="", context=0, prompt=""):
 def cleanup(text, api_key, model, system_prompt, reasoning="",
             base_url=OPENROUTER_URL, timeout=180, provider="openrouter",
             service="OpenRouter", aborter=None, context=0):
-    if not api_key and provider != "local-llm":
+    if provider == "custom":
+        base_url = custom_base(base_url, service)
+    elif not api_key and provider != "local-llm":
         raise ApiError(t("{service} API key is empty. Add it in Settings.",
                          service=service))
     payload = {
@@ -885,6 +924,9 @@ def cleanup(text, api_key, model, system_prompt, reasoning="",
             {"role": "user", "content": f"<transcript>\n{text}\n</transcript>"},
         ],
     }
+    if not model and provider == "custom":
+        # Left empty on purpose: a server with one model loaded answers with it.
+        del payload["model"]
     if provider == "local-llm":
         payload["max_tokens"] = local_ceiling(text, reasoning, context,
                                               system_prompt)
@@ -1091,6 +1133,28 @@ def gemini_models(api_key, base_url=GEMINI_URL):
     ids = [(m.get("id") or "").removeprefix("models/") for m in data.get("data", [])]
     return sorted(i for i in ids
                   if i.startswith("gemini") and not any(w in i for w in NOT_CHAT))
+
+
+def custom_models(api_key, base_url, service, transcription=False):
+    """Every model id a custom server lists, the key only sent when there is one.
+
+    Nothing is filtered out for cleanup, since there is no knowing how a server
+    of one's own names its chat models. `transcription` keeps the
+    whisper-looking ones when there are any and the whole list when not.
+    """
+    base = custom_base(base_url, service).rstrip("/")
+    headers = {"User-Agent": USER_AGENT}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    try:
+        data = _get_json(f"{base}/models", headers)
+    except ApiError as exc:
+        raise explain(exc, service) from None
+    ids = sorted(m["id"] for m in _model_catalog(data) if m.get("id"))
+    if transcription:
+        audio = [i for i in ids if "transcribe" in i or "whisper" in i]
+        return audio or ids
+    return ids
 
 
 def openai_models(api_key, base_url=OPENAI_URL, service="OpenAI"):

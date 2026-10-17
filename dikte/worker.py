@@ -228,7 +228,7 @@ class Pipeline(QObject):
                     # Asked for by hand, on a recording the user wanted back:
                     # it stays, and so does its row, now saying why.
                     self.failed.emit(self._give_up(wav_path, message, duration,
-                                                   target.model, retry))
+                                                   target.model or target.provider, retry))
                     return
                 self._discard(wav_path)
                 self.failed.emit(message)
@@ -282,7 +282,7 @@ class Pipeline(QObject):
                 "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "duration": round(duration, 1),
                 "elapsed": round(time.monotonic() - started, 1),
-                "model": target.model,
+                "model": target.model or target.provider,
                 "cleanup_model": cleanup.model(conf) if cleaned else "",
                 "cleanup_error": warning,
                 "mode": "ask" if ask else "",
@@ -361,7 +361,9 @@ class Pipeline(QObject):
         if ask or written is not None:
             return self._keeping(wav_path, message)[0]
         try:
-            model = self.conf.transcribe_target().model
+            target = self.conf.transcribe_target()
+            # A custom server left to pick its own model has no id to show.
+            model = target.model or target.provider
         except Exception:  # the settings themselves may be what failed
             model = ""
         return self._give_up(wav_path, message, duration, model, retry)
