@@ -327,6 +327,8 @@ def cmd_transcribe(opts):
                      speakers)
 
     result = _headless(begin, on_interrupt=worker.stop)
+    # Finished is emitted before the worker removes its converted audio.
+    worker.wait(10)
     if result.get("error"):
         return fail(opts, result["error"])
 
@@ -437,6 +439,8 @@ def cmd_meetings_retry(opts):
         pipeline.run(row)
 
     result = _headless(start, on_interrupt=pipeline.stop)
+    # As with transcribe: finished comes before the scratch audio is removed.
+    pipeline.wait(10)
     if result.get("error"):
         return fail(opts, result["error"], base=row["base"])
     doc_path, _wav = cfg.meeting_paths(result["base"])

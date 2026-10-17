@@ -102,6 +102,13 @@ class FileTranscriber(QObject):
         if local is not None:
             threading.Thread(target=local.stop, daemon=True).start()
 
+    def wait(self, timeout=None):
+        """Let the run finish its cleanup. The thread is a daemon, so a process
+        that exits on the finished signal would otherwise kill it before it
+        removes its scratch directory."""
+        if self._thread is not None:
+            self._thread.join(timeout)
+
     def _check(self):
         self._abort.check()
 
@@ -149,7 +156,7 @@ class FileTranscriber(QObject):
             if not shutil.which("ffmpeg"):
                 raise api.ApiError(t("ffmpeg not found. Install it to transcribe files."))
 
-            workdir = tempfile.mkdtemp(prefix="dikte-file-")
+            workdir = tempfile.mkdtemp(prefix="dikte-file-", dir=paths.scratch_dir())
             self.progress.emit(t("Converting audio…"))
             wav_path = _to_wav(path, workdir, self._abort)
             self._check()
