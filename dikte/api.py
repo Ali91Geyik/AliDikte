@@ -62,6 +62,37 @@ OPENROUTER_FILE_MODEL = "openai/whisper-1"
 REQUESTY_FILE_MODEL = "openai/whisper-1"
 
 
+# The models known to tell speakers apart, and what each has to be sent to do
+# it. OpenRouter hands a provider its own options under the provider's slug, so
+# the names inside each entry are that provider's, not OpenRouter's. A model
+# missing from here may well diarize too; it is only that nobody has seen it
+# answer with speaker labels, and the option stays hidden until somebody has.
+OPENROUTER_DIARIZE = {
+    "microsoft/mai-transcribe-2": {"azure": {"diarization": {"enabled": True}}},
+    "elevenlabs/scribe-v2": {"elevenlabs": {"diarize": True}},
+    "x-ai/grok-stt-1.0": {"xai": {"diarize": True}},
+    "deepgram/nova-3": {"deepgram": {"diarize": True}},
+}
+# OpenAI keeps it to a model of its own, with a response format of its own.
+OPENAI_DIARIZE = frozenset({"gpt-4o-transcribe-diarize"})
+
+
+def diarize_model(target):
+    """The model that would label the speakers for this target, or ''.
+
+    On OpenRouter the file model is the one a timestamped run already goes to,
+    so it is looked at first; the dictation model is the fallback, for someone
+    who chose a diarizing model there and left the file model empty.
+    """
+    if target.provider == "openrouter":
+        for model in (target.file_model or OPENROUTER_FILE_MODEL, target.model):
+            if model in OPENROUTER_DIARIZE:
+                return model
+    elif target.provider == "openai" and target.model in OPENAI_DIARIZE:
+        return target.model
+    return ""
+
+
 def timestamp_model(provider, selected="", file_model=""):
     """Which model answers with segment times.
 
@@ -391,7 +422,7 @@ def local_failure(service, server, exc):
 
 def _transcribe_request(target, audio_path, language, prompt, response_format,
                         granularity=None, timeout=300, aborter=None,
-                        detect_language=False):
+                        detect_language=False, extra=()):
     if target.provider == "local":
         # The timeouts here are sized for a hosted API, where a slow answer is a
         # bill running. Locally the only thing being spent is time.
@@ -416,6 +447,7 @@ def _transcribe_request(target, audio_path, language, prompt, response_format,
         fields.append(("prompt", prompt))
     for level in granularity or ():
         fields.append(("timestamp_granularities[]", level))
+    fields.extend(extra)
     body, ctype = _multipart(fields, "file", audio_path)
     # An hour of meeting takes the local server a while, and the idle unload has
     # to count that as the model being used rather than as nobody wanting it.
@@ -660,6 +692,76 @@ def transcribe_segments(target, audio_path, language="", prompt="", timeout=300,
         if not text:
             raise ApiError(t("Transcript came back empty."))
         out = [(0.0, 0.0, text)]
+    return out
+
+
+def transcribe_speakers(target, audio_path, language="", prompt="", timeout=300,
+                        aborter=None):
+    """[(start, end, text, speaker)] from a model that labels who is talking.
+
+    `speaker` is the model's own label as a string ("0", "A"), or None where it
+    gave none. Labels only mean something within one request: the same person
+    can be "0" in one chunk and "1" in the next, which the caller sorts out.
+    """
+    model = diarize_model(target)
+    if not model:
+        raise ApiError(t("{model} cannot tell speakers apart.", model=target.model))
+    target = target._replace(model=model)
+    if target.provider == "openai":
+        # This one takes no prompt and no granularity, and answers in a format
+        # of its own. Anything past thirty seconds has to name a chunking
+        # strategy or the request is refused.
+        data = _transcribe_request(target, audio_path, language, "", "diarized_json",
+                                   timeout=timeout, aborter=aborter,
+                                   extra=(("chunking_strategy", "auto"),))
+    else:
+        options = json.dumps({"options": OPENROUTER_DIARIZE[model]})
+        data = _transcribe_request(target, audio_path, language, prompt, "verbose_json",
+                                   granularity=("segment", "word"), timeout=timeout,
+                                   aborter=aborter, extra=(("provider", options),))
+    out = speaker_cues(data)
+    if not out:
+        text = (data.get("text") or "").strip()
+        if not text:
+            raise ApiError(t("Transcript came back empty."))
+        out = [(0.0, 0.0, text, None)]
+    return out
+
+
+def _label(value):
+    return None if value is None else str(value)
+
+
+def speaker_cues(data):
+    """Cues out of a diarized answer, never one that runs across two speakers.
+
+    Word times are the better source where they carry the label: a segment from
+    a diarizing model can be a whole two minute monologue, which is no
+    subtitle. Each speaker's run of words is cut into cues on its own, so a cue
+    never starts with one voice and ends with the other.
+    """
+    words = [w for w in data.get("words") or [] if (w.get("word") or "").strip()]
+    if words and any(w.get("speaker") is not None for w in words):
+        cues, run = [], []
+        for word in words + [None]:
+            if run and (word is None or _label(word.get("speaker")) != run[0][0]):
+                cues += [(start, end, text, run[0][0])
+                         for start, end, text in cues_from_words([w for _, w in run])]
+                run = []
+            if word is not None:
+                run.append((_label(word.get("speaker")), word))
+        # A short cue is held on screen until the next one in its run, but the
+        # other voice's answer is in another run and may come sooner.
+        return [(start, min(end, cues[i + 1][0]) if i + 1 < len(cues)
+                 and start < cues[i + 1][0] else end, text, who)
+                for i, (start, end, text, who) in enumerate(cues)]
+    out = []
+    for seg in data.get("segments") or []:
+        text = (seg.get("text") or "").strip()
+        if text:
+            start = float(seg.get("start") or 0.0)
+            end = float(seg.get("end") or 0.0)
+            out.append((start, max(end, start), text, _label(seg.get("speaker"))))
     return out
 
 

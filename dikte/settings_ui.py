@@ -1128,6 +1128,7 @@ class SettingsWindow(QDialog):
         # for the user ticking them.
         self.file_timestamps.toggled.connect(self._remember_file_choices)
         self.file_cleanup.toggled.connect(self._remember_file_choices)
+        self.file_speakers.toggled.connect(self._remember_file_choices)
         # On a machine where nothing can transcribe yet, this window was opened
         # because of that, so open it on the tab that fixes it.
         if not conf.transcribe_ready():
@@ -2194,6 +2195,15 @@ class SettingsWindow(QDialog):
         )
         layout.addWidget(self.file_timestamps)
 
+        # Hidden rather than greyed out: most models cannot do it, and a box
+        # that is always off says nothing about the one that is selected.
+        self.file_speakers = QCheckBox(t("Tell the speakers apart"))
+        self.file_speakers.setToolTip(
+            t("Puts who is talking in front of every line. Only offered for the "
+              "models known to label speakers.")
+        )
+        layout.addWidget(self.file_speakers)
+
         self.file_cleanup = QCheckBox(t("Run the cleanup model afterwards"))
         self.file_cleanup.setToolTip(
             t("With its own rules, under Cleanup rules: written for subtitles, so "
@@ -2623,9 +2633,13 @@ class SettingsWindow(QDialog):
             conf["meeting_prompt"] or self._loaded_defaults["meeting"]
         )
 
-        with QSignalBlocker(self.file_timestamps), QSignalBlocker(self.file_cleanup):
+        with QSignalBlocker(self.file_timestamps), QSignalBlocker(self.file_cleanup), \
+                QSignalBlocker(self.file_speakers):
             self.file_timestamps.setChecked(conf["file_timestamps"])
             self.file_cleanup.setChecked(conf["file_cleanup"])
+            self.file_speakers.setChecked(conf["file_speakers"])
+        # The run reads the saved settings, so the saved model is the one asked.
+        self.file_speakers.setVisible(bool(api.diarize_model(conf.transcribe_target())))
         if not hasattr(self, "file_path"):
             self.file_path = ""
 
@@ -2801,6 +2815,7 @@ class SettingsWindow(QDialog):
 
         conf["file_timestamps"] = self.file_timestamps.isChecked()
         conf["file_cleanup"] = self.file_cleanup.isChecked()
+        conf["file_speakers"] = self.file_speakers.isChecked()
 
         # Left empty, only the toggle falls back to a default: the application
         # is unusable without it. The rest stay empty, which is what turns
@@ -3417,6 +3432,7 @@ class SettingsWindow(QDialog):
         """
         self.conf["file_timestamps"] = self.file_timestamps.isChecked()
         self.conf["file_cleanup"] = self.file_cleanup.isChecked()
+        self.conf["file_speakers"] = self.file_speakers.isChecked()
         try:
             self.conf.save()
         except OSError as exc:
@@ -3434,6 +3450,7 @@ class SettingsWindow(QDialog):
             self.file_path,
             self.file_timestamps.isChecked(),
             self.file_cleanup.isChecked(),
+            self.file_speakers.isChecked(),
         )
 
     def _stop_file(self):

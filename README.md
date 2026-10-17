@@ -227,7 +227,8 @@ running.
   keeps its recording, and a retry resumes from the transcript it already paid
   for.
 - **Audio and video files** run through the same models under Settings → Audio
-  file, optionally with `[mm:ss]` timestamps, chunked through ffmpeg when long,
+  file, optionally with `[mm:ss]` timestamps and, on a model known to diarize,
+  speaker labels, chunked through ffmpeg when long,
   and saved as `.txt` or as `.srt` subtitles; their cleanup follows its own rules,
   written for subtitles, so the lines keep their place and nothing is shortened.
 - **History** of every dictation under Settings → History, with a size limit and

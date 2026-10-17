@@ -311,6 +311,10 @@ def cmd_transcribe(opts):
     # be handed their settings here too; the GUI does this at startup.
     conf.apply_local()
     timestamps = opts.srt or _pick(opts.timestamps, conf["file_timestamps"])
+    speakers = _pick(opts.speakers, conf["file_speakers"])
+    if opts.speakers and not api.diarize_model(conf.transcribe_target()):
+        return fail(opts, "the selected transcription model is not known to "
+                          "tell speakers apart")
     worker = filetranscribe.FileTranscriber(conf)
 
     def begin(finish):
@@ -319,7 +323,8 @@ def cmd_transcribe(opts):
             lambda text, segments: finish({"text": text, "segments": segments})
         )
         worker.failed.connect(lambda error: finish({"error": error}))
-        worker.start(path, timestamps, _pick(opts.cleanup, conf["file_cleanup"]))
+        worker.start(path, timestamps, _pick(opts.cleanup, conf["file_cleanup"]),
+                     speakers)
 
     result = _headless(begin, on_interrupt=worker.stop)
     if result.get("error"):
@@ -1186,6 +1191,9 @@ def build_parser():
                             default=None, help="[mm:ss] in front of every line")
     transcribe.add_argument("--cleanup", action=argparse.BooleanOptionalAction,
                             default=None, help="run the cleanup model over it")
+    transcribe.add_argument("--speakers", action=argparse.BooleanOptionalAction,
+                            default=None, help="label who is talking, where the "
+                            "model is known to")
     transcribe.set_defaults(func=cmd_transcribe)
 
     # --- meetings ---------------------------------------------------------
