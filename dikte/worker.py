@@ -83,7 +83,7 @@ class Pipeline(QObject):
         return self._thread is not None and self._thread.is_alive()
 
     def run(self, wav_path, duration, rms_values=(), ask=False, paste=None,
-            focus=None, retry=None):
+            focus=None, retry=None, mode=""):
         """`paste` overrides the setting for this one run, which is what a
         dictation asked for from a terminal wants: the text comes back down the
         socket, and pasting it into whatever had focus is nobody's intention.
@@ -98,14 +98,17 @@ class Pipeline(QObject):
 
         `retry` is the history row of a failed dictation whose kept recording
         `wav_path` is. Its outcome takes that row's place rather than adding a
-        new one. False when that recording is already being retried."""
+        new one. False when that recording is already being retried.
+
+        `mode` is the dictation mode this one recording was started in (imla,
+        prompt or raw); empty means whichever is chosen in Settings."""
         with self._jobs_lock:
             if retry is not None:
                 if wav_path in self._retrying:
                     return False
                 self._retrying.add(wav_path)
             self._jobs.append((wav_path, duration, list(rms_values), ask, paste,
-                               focus, retry))
+                               focus, retry, mode))
             if self._draining:
                 return
             self._draining = True
@@ -167,8 +170,9 @@ class Pipeline(QObject):
                 self.stage.emit(stage)
 
     def _work(self, wav_path, duration, rms_values, ask, paste_override=None,
-              focus=None, retry=None):
+              focus=None, retry=None, mode=""):
         conf = self.conf
+        mode = conf.dictation_mode(mode)
         started = time.monotonic()
         raw = ""
         # The row this run has written, so a failure after it (the clipboard
@@ -247,11 +251,14 @@ class Pipeline(QObject):
             # Claude reads through “eee” and “hani” without help, so a dictation
             # on its way there is normally sent as it was heard, one API call and
             # a second or two lighter.
-            if (conf["assistant_cleanup"] if ask else conf["cleanup_enabled"]):
+            # Raw mode is the transcript exactly as heard, so no model sees it.
+            if (conf["assistant_cleanup"] if ask
+                    else conf["cleanup_enabled"] and mode != "raw"):
                 self.stage.emit(t("Cleaning up…"))
                 cleaned = True
                 try:
-                    text = cleanup.run(raw, conf, conf.cleanup_prompt(speech=detected))
+                    text = cleanup.run(raw, conf, conf.cleanup_prompt(
+                        speech=detected, mode="imla" if ask else mode))
                 except api.ApiError as exc:
                     # Keep the transcript, but never let the failure pass unseen:
                     # a rejected key would otherwise look like working dictation.
