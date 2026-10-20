@@ -40,7 +40,8 @@ class AnthropicCleanup(DikteTest):
         payload = sent_json(calls[0])
         self.assertEqual(payload["system"], "metni temizle")
         self.assertEqual(payload["model"], "claude-haiku-5-5")
-        self.assertEqual(payload["temperature"], 0)
+        self.assertNotIn("temperature", payload)
+        self.assertEqual(payload["thinking"], {"type": "disabled"})
         self.assertEqual(payload["messages"][0]["content"],
                          "<transcript>\nıı merhaba\n</transcript>")
 

@@ -969,8 +969,9 @@ def anthropic_cleanup(text, api_key, model, system_prompt,
                       base_url=ANTHROPIC_URL, timeout=180, aborter=None):
     """The same job over Anthropic's own Messages API rather than a router.
 
-    No thinking is asked for: cleanup is punctuation, and Haiku answers it in
-    about a second without.
+    Thinking is turned off: cleanup is punctuation, and current Claude models
+    think by default, which is billed as output and costs seconds. No
+    temperature either, since the current models refuse any non-default one.
     """
     service = "Claude"
     if not api_key:
@@ -979,7 +980,7 @@ def anthropic_cleanup(text, api_key, model, system_prompt,
     payload = {
         "model": model,
         "max_tokens": 8192,
-        "temperature": 0,
+        "thinking": {"type": "disabled"},
         "system": system_prompt,
         "messages": [
             {"role": "user", "content": f"<transcript>\n{text}\n</transcript>"},
