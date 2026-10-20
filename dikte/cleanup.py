@@ -29,7 +29,7 @@ from . import ggml
 from . import paths
 from .i18n import t
 
-PROVIDERS = ("openrouter", "requesty", "gemini", "deepseek", "opencode", "custom", "local",
+PROVIDERS = ("anthropic", "openrouter", "requesty", "gemini", "deepseek", "opencode", "custom", "local",
              "claude", "codex", "agy")
 
 
@@ -68,6 +68,8 @@ def model(conf):
         return conf["cleanup_agy_model"].strip() or "agy"
     if name == "gemini":
         return conf["cleanup_gemini_model"]
+    if name == "anthropic":
+        return conf["cleanup_anthropic_model"]
     if name == "deepseek":
         return conf["cleanup_deepseek_model"]
     if name == "opencode":
@@ -87,6 +89,12 @@ def run(text, conf, system_prompt, timeout=180, aborter=None):
     between blocks instead, which is close enough when a block is seconds.
     """
     name = provider(conf)
+    if name == "anthropic":
+        return api.anthropic_cleanup(
+            text, conf.anthropic_key(), conf["cleanup_anthropic_model"].strip(),
+            system_prompt, base_url=conf["anthropic_base_url"], timeout=timeout,
+            aborter=aborter,
+        )
     if name == "openrouter":
         return api.cleanup(
             text, conf.openrouter_key(), conf["cleanup_model"], system_prompt,

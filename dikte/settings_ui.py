@@ -86,6 +86,7 @@ GEMINI_MODELS = [
     "gemini-2.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash",
 ]
 DEEPSEEK_MODELS = ["deepseek-flash", "deepseek-v4-pro"]
+ANTHROPIC_MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5"]
 # agy's model ids carry the reasoning effort in their suffix, which is why one
 # model appears here at more than one level. The same list seeds two boxes:
 # cleanup, which wants the bottom rung, and the agent, which sometimes does not.
@@ -97,7 +98,7 @@ AGY_MODELS = [
 # model here takes a little longer and costs nothing, and the three CLIs the
 # agent can run on open a whole session to do the smaller job.
 CLEANUP_PROVIDERS = [
-    ("OpenRouter", "openrouter"), ("Google AI Studio", "gemini"),
+    ("Claude API", "anthropic"), ("OpenRouter", "openrouter"), ("Google AI Studio", "gemini"),
     ("DeepSeek", "deepseek"), ("OpenCode Go", "opencode"), ("Requesty", "requesty"),
     ("Custom server", "custom"), ("This machine (llama.cpp)", "local"), ("Claude Code", "claude"),
     ("Codex", "codex"), ("Antigravity", "agy"),
@@ -997,6 +998,7 @@ class SettingsWindow(QDialog):
     _models_loaded = pyqtSignal(list, str)
     _gemini_models_loaded = pyqtSignal(list, str)
     _deepseek_models_loaded = pyqtSignal(list, str)
+    _anthropic_models_loaded = pyqtSignal(list, str)
     _opencode_models_loaded = pyqtSignal(list, str)
     _requesty_models_loaded = pyqtSignal(list, str)
     _custom_models_loaded = pyqtSignal(list, str)
@@ -1101,6 +1103,7 @@ class SettingsWindow(QDialog):
         self._models_loaded.connect(self._on_models_loaded)
         self._gemini_models_loaded.connect(self._on_gemini_models_loaded)
         self._deepseek_models_loaded.connect(self._on_deepseek_models_loaded)
+        self._anthropic_models_loaded.connect(self._on_anthropic_models_loaded)
         self._transcribe_models_loaded.connect(self._on_transcribe_models_loaded)
         self._codex_models_loaded.connect(self._on_codex_models_loaded)
         self._opencode_models_loaded.connect(self._on_opencode_models_loaded)
@@ -1482,6 +1485,9 @@ class SettingsWindow(QDialog):
         self.gemini_key = self._key_row(
             keys_form, "gemini", t("(falls back to GEMINI_API_KEY)"),
             self._test_gemini, service="Google AI Studio")
+        self.anthropic_key = self._key_row(
+            keys_form, "anthropic", t("sk-ant-… (falls back to ANTHROPIC_API_KEY)"),
+            self._test_anthropic, service="Claude API")
         self.deepseek_key = self._key_row(
             keys_form, "deepseek", t("(falls back to DEEPSEEK_API_KEY)"),
             self._test_deepseek, service="DeepSeek")
@@ -1656,6 +1662,14 @@ class SettingsWindow(QDialog):
         self.cleanup_deepseek_model_row = self._row(
             self.cleanup_deepseek_model, self.refresh_deepseek_models)
         orr_form.addRow(t("Model"), self.cleanup_deepseek_model_row)
+        self.cleanup_anthropic_model = QComboBox()
+        self.cleanup_anthropic_model.setEditable(True)
+        self.cleanup_anthropic_model.addItems(ANTHROPIC_MODELS)
+        self.refresh_anthropic_models = QPushButton(t("Fetch model list"))
+        self.refresh_anthropic_models.clicked.connect(self._load_anthropic_models)
+        self.cleanup_anthropic_model_row = self._row(
+            self.cleanup_anthropic_model, self.refresh_anthropic_models)
+        orr_form.addRow(t("Model"), self.cleanup_anthropic_model_row)
 
         # One row per provider rather than one box that means a different thing
         # in each: an OpenRouter id and a Claude alias do not belong in the same
@@ -2584,6 +2598,7 @@ class SettingsWindow(QDialog):
             self._models[name] = conf[who.model]
         self.gemini_key.setText(conf["gemini_api_key"])
         self.deepseek_key.setText(conf["deepseek_api_key"])
+        self.anthropic_key.setText(conf["anthropic_api_key"])
         self.opencode_key.setText(conf["opencode_api_key"])
         self.custom_url.setText(conf["custom_base_url"])
         self._shown_provider = ""
@@ -2622,6 +2637,9 @@ class SettingsWindow(QDialog):
         )
         self.cleanup_deepseek_model.setCurrentText(
             conf["cleanup_deepseek_model"] or cfg.DEFAULTS["cleanup_deepseek_model"]
+        )
+        self.cleanup_anthropic_model.setCurrentText(
+            conf["cleanup_anthropic_model"] or cfg.DEFAULTS["cleanup_anthropic_model"]
         )
         self.cleanup_claude_model.setCurrentText(conf["cleanup_claude_model"])
         self.cleanup_codex_model.setCurrentText(
@@ -2754,6 +2772,7 @@ class SettingsWindow(QDialog):
         conf["openrouter_file_model"] = self.file_model.currentText().strip()
         conf["gemini_api_key"] = self.gemini_key.text().strip()
         conf["deepseek_api_key"] = self.deepseek_key.text().strip()
+        conf["anthropic_api_key"] = self.anthropic_key.text().strip()
         conf["opencode_api_key"] = self.opencode_key.text().strip()
         conf["custom_base_url"] = self.custom_url.text().strip()
         conf["local_binary"] = self.local_whisper.custom_binary
@@ -2776,6 +2795,10 @@ class SettingsWindow(QDialog):
         conf["cleanup_deepseek_model"] = (
             self.cleanup_deepseek_model.currentText().strip()
             or cfg.DEFAULTS["cleanup_deepseek_model"]
+        )
+        conf["cleanup_anthropic_model"] = (
+            self.cleanup_anthropic_model.currentText().strip()
+            or cfg.DEFAULTS["cleanup_anthropic_model"]
         )
         conf["cleanup_claude_model"] = (self.cleanup_claude_model.currentText().strip()
                                         or cfg.DEFAULTS["cleanup_claude_model"])
@@ -3412,6 +3435,37 @@ class SettingsWindow(QDialog):
             count=len(api.gemini_models(key, base)),
         ))
 
+    def _test_anthropic(self):
+        key, base = self._typed_key("anthropic")
+        self._test_key("anthropic", lambda: t(
+            "Connection works. {count} models visible.",
+            count=len(api.anthropic_models(key, base)),
+        ))
+
+    def _load_anthropic_models(self):
+        self.refresh_anthropic_models.setEnabled(False)
+        self.models_label.setText(t("Fetching model list…"))
+        key, base = self._typed_key("anthropic")
+
+        def work():
+            try:
+                self._anthropic_models_loaded.emit(api.anthropic_models(key, base), "")
+            except api.ApiError as exc:
+                self._anthropic_models_loaded.emit([], str(exc))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_anthropic_models_loaded(self, models, error):
+        self.refresh_anthropic_models.setEnabled(True)
+        if error:
+            self.models_label.setText(t("Could not fetch the list: {error}", error=error))
+            return
+        self.models_label.setText(t("Runs on the Claude API."))
+        current = self.cleanup_anthropic_model.currentText()
+        self.cleanup_anthropic_model.clear()
+        self.cleanup_anthropic_model.addItems(models)
+        self.cleanup_anthropic_model.setCurrentText(current)
+
     def _test_deepseek(self):
         key, base = self._typed_key("deepseek")
         self._test_key("deepseek", lambda: t(
@@ -3685,6 +3739,8 @@ class SettingsWindow(QDialog):
                                         provider == "gemini")
         self.cleanup_form.setRowVisible(self.cleanup_deepseek_model_row,
                                         provider == "deepseek")
+        self.cleanup_form.setRowVisible(self.cleanup_anthropic_model_row,
+                                        provider == "anthropic")
         self.cleanup_form.setRowVisible(self.cleanup_claude_model,
                                         provider == "claude")
         self.cleanup_form.setRowVisible(self.cleanup_codex_model,
@@ -3713,6 +3769,8 @@ class SettingsWindow(QDialog):
             self.models_label.setText(t("Runs on OpenCode Go."))
         elif provider == "deepseek":
             self.models_label.setText(t("Runs on DeepSeek."))
+        elif provider == "anthropic":
+            self.models_label.setText(t("Runs on the Claude API."))
         elif provider == "requesty":
             self.models_label.setText(t("Runs on Requesty."))
         elif provider == "custom":

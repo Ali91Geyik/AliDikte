@@ -45,6 +45,8 @@ GROQ_URL = "https://api.groq.com/openai/v1"
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 REQUESTY_URL = "https://router.requesty.ai/v1"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+ANTHROPIC_URL = "https://api.anthropic.com/v1"
+ANTHROPIC_VERSION = "2023-06-01"
 
 # The floor for a local request. The timeouts elsewhere are sized for a hosted
 # API, where a slow answer is a bill running; here the only thing being spent is
@@ -322,7 +324,7 @@ def _authenticated_request(url, data=None, headers=None, method=None):
     """
     request = urllib.request.Request(url, data=data, method=method)
     for name, value in (headers or {}).items():
-        if name.lower() == "authorization":
+        if name.lower() in ("authorization", "x-api-key"):
             request.add_unredirected_header(name, value)
         else:
             request.add_header(name, value)
@@ -961,6 +963,58 @@ def cleanup(text, api_key, model, system_prompt, reasoning="",
         # the better of the two.
         raise ApiError(t("The cleanup model was cut off before it finished."))
     return content
+
+
+def anthropic_cleanup(text, api_key, model, system_prompt,
+                      base_url=ANTHROPIC_URL, timeout=180, aborter=None):
+    """The same job over Anthropic's own Messages API rather than a router.
+
+    No thinking is asked for: cleanup is punctuation, and Haiku answers it in
+    about a second without.
+    """
+    service = "Claude"
+    if not api_key:
+        raise ApiError(t("{service} API key is empty. Add it in Settings.",
+                         service=service))
+    payload = {
+        "model": model,
+        "max_tokens": 8192,
+        "temperature": 0,
+        "system": system_prompt,
+        "messages": [
+            {"role": "user", "content": f"<transcript>\n{text}\n</transcript>"},
+        ],
+    }
+    headers = {"User-Agent": USER_AGENT, "Content-Type": "application/json",
+               "x-api-key": api_key, "anthropic-version": ANTHROPIC_VERSION}
+    try:
+        data = _request(f"{base_url.rstrip('/')}/messages",
+                        json.dumps(payload).encode("utf-8"), headers,
+                        timeout=timeout, aborter=aborter)
+    except ApiError as exc:
+        raise explain(exc, service) from None
+    content = "".join(block.get("text", "") for block in data.get("content") or []
+                      if block.get("type") == "text").strip()
+    if not content:
+        raise ApiError(t("The cleanup model returned an empty reply."))
+    if data.get("stop_reason") == "max_tokens":
+        # Refused for the reason the OpenAI-shaped call refuses a "length".
+        raise ApiError(t("The cleanup model was cut off before it finished."))
+    return content
+
+
+def anthropic_models(api_key, base_url=ANTHROPIC_URL):
+    """The model ids the key can use, for the settings window's list."""
+    if not api_key:
+        raise ApiError(t("{service} API key is empty. Add it in Settings.",
+                         service="Claude"))
+    headers = {"User-Agent": USER_AGENT, "x-api-key": api_key,
+               "anthropic-version": ANTHROPIC_VERSION}
+    try:
+        data = _get_json(f"{base_url.rstrip('/')}/models?limit=100", headers)
+    except ApiError as exc:
+        raise explain(exc, "Claude API") from None
+    return sorted(item["id"] for item in data.get("data") or [] if item.get("id"))
 
 
 def chat(messages, api_key, model, system_prompt, reasoning="",

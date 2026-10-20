@@ -531,7 +531,7 @@ def cmd_history_clear(opts):
 # --- settings ---------------------------------------------------------------
 
 SECRET_KEYS = ("openai_api_key", "groq_api_key", "openrouter_api_key",
-               "gemini_api_key", "deepseek_api_key", "opencode_api_key", "requesty_api_key",
+               "gemini_api_key", "anthropic_api_key", "deepseek_api_key", "opencode_api_key", "requesty_api_key",
                "custom_api_key")
 
 
@@ -1024,6 +1024,7 @@ def cmd_doctor(opts):
     cleanup_service, cleanup_key = {
         "openrouter": ("OpenRouter", conf.openrouter_key()),
         "gemini": ("Google AI Studio", conf.gemini_key()),
+        "anthropic": ("Claude API", conf.anthropic_key()),
         "deepseek": ("DeepSeek", conf.deepseek_key()),
         "opencode": ("OpenCode Go", conf.opencode_key()),
         "requesty": ("Requesty", conf.requesty_key()),

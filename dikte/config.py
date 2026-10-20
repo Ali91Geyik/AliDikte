@@ -434,6 +434,8 @@ DEFAULTS = {
     # Google's OpenAI-compatible endpoint. Cleanup only: there is no
     # /audio/transcriptions behind it, so it is not one of the TRANSCRIBERS.
     "gemini_base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "anthropic_api_key": "",
+    "anthropic_base_url": "https://api.anthropic.com/v1",
     "deepseek_api_key": "",
     "deepseek_base_url": "https://api.deepseek.com",
     "opencode_api_key": "",
@@ -482,6 +484,7 @@ DEFAULTS = {
     "cleanup_codex_model": "",         # empty -> whatever Codex is set to
     "cleanup_gemini_model": "gemini-3.5-flash-lite",
     "cleanup_deepseek_model": "deepseek-flash",
+    "cleanup_anthropic_model": "claude-haiku-5-5",
     "cleanup_agy_model": "",           # empty -> whatever Antigravity is set to
     "cleanup_opencode_model": "deepseek-v4-flash",
     "cleanup_requesty_model": "google/gemini-3.5-flash-lite",
@@ -753,6 +756,9 @@ class Config:
 
     def gemini_key(self):
         return self.api_key("gemini_api_key")
+
+    def anthropic_key(self):
+        return self.api_key("anthropic_api_key")
 
     def deepseek_key(self):
         return self.api_key("deepseek_api_key")
