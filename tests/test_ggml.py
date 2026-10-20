@@ -1951,6 +1951,11 @@ class WindowsAssets(Local):
         self.assertEqual(ggml._wanted_assets(ggml.WHISPER),
                          ("whisper-blas-bin-x64.zip", "whisper-bin-x64.zip"))
 
+    def test_an_nvidia_card_is_named_as_cuda(self):
+        self.patch_attr(ggml, "_has_nvidia", lambda: True)
+        self.patch_attr(ggml, "_has_vulkan", lambda: True)
+        self.assertEqual(ggml.accelerator(), "CUDA")
+
     def test_an_nvidia_card_gets_the_cuda_build_first(self):
         self.patch_attr(ggml, "_has_nvidia", lambda: True)
         self.assertEqual(ggml._wanted_assets(ggml.WHISPER),

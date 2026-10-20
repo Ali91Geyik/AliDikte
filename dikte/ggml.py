@@ -962,6 +962,10 @@ def accelerator():
     if sys.platform == "darwin":
         return ("Metal" if platform.machine().lower() in ("arm64", "aarch64")
                 else "")
+    # The CUDA build is the one fetched for an NVIDIA card on Windows, so that
+    # is the interface it reaches, Vulkan loader or not.
+    if _has_nvidia():
+        return "CUDA"
     return "Vulkan" if _has_vulkan() else ""
 
 
