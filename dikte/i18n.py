@@ -348,6 +348,26 @@ TR = {
     "Runs on Google AI Studio.": "Google AI Studio üzerinde çalışır.",
     "Runs on DeepSeek.": "DeepSeek üzerinde çalışır.",
     "Runs on the Claude API.": "Claude API üzerinde çalışır.",
+    "Imla": "İmla",
+    "Prompt": "Prompt",
+    "Raw": "Ham",
+    "Mode": "Mod",
+    "Imla: your own sentences, tidied. Prompt: what you said, rewritten as a prompt for an AI model. Raw: the transcript exactly as heard.":
+        "İmla: kendi cümlelerin, düzeltilmiş. Prompt: söylediğin, yapay zeka için "
+        "bir prompt olarak yeniden yazılmış. Ham: duyulduğu gibi transkript.",
+    "Your own expressions, one per line as \u201cexpression - what it means\u201d. Imla keeps them as you said them; Prompt writes what they mean, for a model that has never heard them.":
+        "Kendi tabirlerin, her satıra bir tane: \u201ctabir - anlamı\u201d. İmla "
+        "onları söylediğin gibi korur; Prompt, onları hiç duymamış bir model için "
+        "anlamlarını yazar.",
+    "My expressions": "Tabirlerim",
+    "gulballig yapmak - garip, alışılmadık işler yapmak": "gulballig yapmak - garip, alışılmadık işler yapmak",
+    "Dictate a prompt": "Prompt olarak dikte",
+    "Dictate raw": "Ham dikte",
+    "Starts and stops a dictation in Prompt mode, whatever mode Start and stop is set to.":
+        "Başlat ve durdur hangi moddaysa olsun, Prompt modunda bir dikte başlatır ve durdurur.",
+    "Starts and stops a dictation that is pasted exactly as heard, with no model in between.":
+        "Arada hiçbir model olmadan, duyulduğu gibi yapıştırılan bir dikte başlatır ve durdurur.",
+    "Dictation mode": "Dikte modu",
     "Runs on OpenCode Go.": "OpenCode Go üzerinde çalışır.",
     "Runs on Requesty.": "Requesty üzerinde çalışır.",
     "Runs on your custom server.": "Özel sunucunda çalışır.",

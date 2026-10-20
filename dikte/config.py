@@ -634,6 +634,9 @@ DEFAULTS = {
     # habit for, and a combination nobody asked for is one taken away from
     # whatever else was using it.
     "pause_shortcut": "",
+    # The fork's mode keys; Ctrl+Option on a Mac for the reason the toggle has.
+    "prompt_shortcut": "Ctrl+Option+Shift+Space" if _MACOS else "Ctrl+Shift+Space",
+    "raw_shortcut": "Ctrl+Option+R" if _MACOS else "Ctrl+Alt+R",
     "evdev_hotkey": False,
     "overlay_corner": "bottom-left",
     "overlay_screen": "",
@@ -952,12 +955,7 @@ class Config:
         return self["cleanup_provider"] == "local"
 
     def dictation_mode(self, asked=""):
-        """The mode a dictation runs in: the one its shortcut asked for, else
-        the one chosen in Settings, else imla."""
-        for mode in (asked, self["dictation_mode"]):
-            if mode in DICTATION_MODES:
-                return mode
-        return "imla"
+        return dictation_mode(self, asked)
 
     def cleanup_prompt(self, with_timestamps=False, with_speakers=False,
                        subtitles=False, speech="", participants=True, mode="imla"):
@@ -1041,6 +1039,15 @@ class Config:
 
 def _fingerprint(text):
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
+def dictation_mode(conf, asked=""):
+    """The mode a dictation runs in: the one its shortcut asked for, else the
+    one chosen in Settings, else imla. Any mapping will do for `conf`."""
+    for mode in (asked, conf.get("dictation_mode", "")):
+        if mode in DICTATION_MODES:
+            return mode
+    return "imla"
 
 
 def default_cleanup_prompt():

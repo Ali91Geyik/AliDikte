@@ -37,7 +37,7 @@ if sys.platform == "darwin":
 
 from PyQt6.QtCore import (QObject, QTimer, QElapsedTimer, QSocketNotifier,  # noqa: E402
                           Qt, QUrl, pyqtSignal)
-from PyQt6.QtGui import QAction, QCursor, QDesktopServices, QIcon  # noqa: E402
+from PyQt6.QtGui import QAction, QActionGroup, QCursor, QDesktopServices, QIcon  # noqa: E402
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket  # noqa: E402
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon  # noqa: E402
 
@@ -133,6 +133,8 @@ class Dikte:
         # own: everything that can be done to a recording can be done to a
         # paused one, and a fourth state would have to say so four times over.
         self.paused = False
+        # The dictation mode of the recording under way; "" between recordings.
+        self.recording_mode = ""
         # Paused time, which is time the recording does not have: the clock on
         # screen and the limit both go by what was actually captured.
         self._paused_ms = 0
@@ -176,7 +178,9 @@ class Dikte:
         self.overlay = Overlay(self.conf["overlay_corner"],
                                screen_name=self.conf["overlay_screen"],
                                follow_pointer=self.conf["overlay_follows_pointer"],
-                               theme_name=self.conf["theme"])
+                               theme_name=self.conf["theme"],
+                               mode_buttons=True,
+                               on_mode=lambda mode: self.set_dictation_mode(mode))
         # The agent's indicator sits on top of the dictation one when both are
         # up, and drops into the corner when it is alone there.
         self.ask_overlay = Overlay(self.conf["overlay_corner"], below=self.overlay,
@@ -262,6 +266,17 @@ class Dikte:
         self.toggle_action = QAction(t("Start recording"), self.menu)
         self.toggle_action.triggered.connect(self._toggle)
         self.menu.addAction(self.toggle_action)
+
+        # The fork's modes: which one Start recording dictates in.
+        self.mode_menu = self.menu.addMenu(t("Dictation mode"))
+        self.mode_group = QActionGroup(self.mode_menu)
+        self.mode_actions = {}
+        for label, mode in (("Imla", "imla"), ("Prompt", "prompt"), ("Raw", "raw")):
+            action = QAction(t(label), self.mode_menu, checkable=True)
+            action.triggered.connect(lambda _checked, m=mode: self.set_dictation_mode(m))
+            self.mode_group.addAction(action)
+            self.mode_menu.addAction(action)
+            self.mode_actions[mode] = action
 
         # Named in _refresh_tray as well, since it says one of two things.
         self.pause_action = QAction(t("Pause the recording"), self.menu)
@@ -396,6 +411,9 @@ class Dikte:
         self._refresh_tray()
 
     def _refresh_tray(self):
+        chosen = cfg.dictation_mode(self.conf)
+        for mode, action in getattr(self, "mode_actions", {}).items():
+            action.setChecked(mode == chosen)
         labels = {
             IDLE: ("Start recording", "audio-input-microphone", "Dikte: ready"),
             RECORDING: ("Stop and transcribe", "media-record", "Dikte: recording"),
@@ -503,6 +521,12 @@ class Dikte:
     def toggle_pause(self):
         self._external("pause", self._toggle_pause)
 
+    def toggle_prompt(self):
+        self._external("prompt", lambda: self._toggle_mode("prompt"))
+
+    def toggle_raw(self):
+        self._external("raw", lambda: self._toggle_mode("raw"))
+
     def cancel(self):
         self._external("cancel", self._cancel)
 
@@ -530,7 +554,9 @@ class Dikte:
             timer = self.last_evdev[name] = QElapsedTimer()
         timer.restart()
         handlers = {"meeting": self._toggle_meeting, "ask": self._toggle_ask,
-                    "cancel": self._cancel, "pause": self._toggle_pause}
+                    "cancel": self._cancel, "pause": self._toggle_pause,
+                    "prompt": lambda: self._toggle_mode("prompt"),
+                    "raw": lambda: self._toggle_mode("raw")}
         handlers.get(name, self._toggle)()
 
     def _retire_listener(self):
@@ -566,6 +592,8 @@ class Dikte:
             handler = {
                 "cancel": self.cancel,
                 "pause": self.toggle_pause,
+                "dictate-prompt": self.toggle_prompt,
+                "dictate-raw": self.toggle_raw,
                 "ask-cancel": self.cancel_ask,
                 "ask-reset": self.reset_conversation,
                 "meeting-cancel": self.cancel_meeting,
@@ -722,6 +750,28 @@ class Dikte:
             # waits its turn in the pipeline.
             self.start()
 
+    def _toggle_mode(self, mode):
+        """A mode key: stops whatever is recording, or starts a dictation that
+        runs in `mode` rather than in the one chosen in Settings."""
+        if self._repeated(mode):
+            return
+        if self.state == RECORDING:
+            self.stop()
+        else:
+            self.start(mode=mode)
+
+    def set_dictation_mode(self, mode):
+        """The mode chosen from Settings, the tray or the indicator. Changing it
+        mid-recording changes what that recording becomes."""
+        if mode not in cfg.DICTATION_MODES:
+            return
+        self.conf["dictation_mode"] = mode
+        self.conf.save()
+        if self.state == RECORDING:
+            self.recording_mode = mode
+        self.overlay.set_mode(mode)
+        self._refresh_tray()
+
     def _toggle_ask(self):
         if self._repeated("ask"):
             return
@@ -751,12 +801,15 @@ class Dikte:
         """
         return mac_window.frontmost_pid() if sys.platform == "darwin" else None
 
-    def start(self):
+    def start(self, mode=""):
         # Only a held microphone blocks: a previous dictation still being
         # transcribed or cleaned up is the pipeline's business, not the
         # recorder's.
         if self.state == RECORDING or self.recording:
             return
+        # The mode this recording is for, read when it ends.
+        self.recording_mode = cfg.dictation_mode(self.conf, mode)
+        self.overlay.set_mode(self.recording_mode)
         if isinstance(getattr(self, "home_messages", None), dict):
             self.home_messages[DICTATION] = ""
             self.home_messages.pop("dictation_stage", None)
@@ -1140,8 +1193,9 @@ class Dikte:
         else:
             self._transcripts_pending += 1
             self._queued_retries.append(False)
+            mode, self.recording_mode = self.recording_mode, ""
             self.pipeline.run(wav_path, duration, rms_values,
-                              paste=wants_paste, focus=focus)
+                              paste=wants_paste, focus=focus, mode=mode)
 
     def retry_dictation(self, row):
         """Send a failed dictation's kept recording through the chain again.

@@ -37,6 +37,8 @@ CANCEL_DESKTOP_ID = "dikte-cancel.desktop"
 PAUSE_DESKTOP_ID = "dikte-pause.desktop"
 MEETING_DESKTOP_ID = "dikte-meeting.desktop"
 ASK_DESKTOP_ID = "dikte-ask.desktop"
+PROMPT_DESKTOP_ID = "dikte-prompt.desktop"
+RAW_DESKTOP_ID = "dikte-raw.desktop"
 APPLICATIONS_DIR = pathlib.Path.home() / ".local/share/applications"
 DESKTOP_FILE = APPLICATIONS_DIR / DESKTOP_ID
 SHORTCUTS_FILE = pathlib.Path.home() / ".config/kglobalshortcutsrc"
@@ -62,6 +64,13 @@ SHORTCUTS = {
     "meeting": Shortcut("meeting", MEETING_DESKTOP_ID,
                         "Dikte: start/end a meeting recording",
                         "meeting_shortcut", ""),
+    # The fork's two mode keys: a dictation started on one of them runs in that
+    # mode whatever Settings has chosen; the toggle above uses the chosen one.
+    "prompt": Shortcut("dictate-prompt", PROMPT_DESKTOP_ID,
+                       "Dikte: dictate a prompt for an AI model",
+                       "prompt_shortcut", ""),
+    "raw": Shortcut("dictate-raw", RAW_DESKTOP_ID, "Dikte: dictate the raw transcript",
+                    "raw_shortcut", ""),
 }
 
 # The fallbacks above are Linux's. macOS holds Ctrl+Space for the input-source

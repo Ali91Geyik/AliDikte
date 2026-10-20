@@ -87,6 +87,7 @@ GEMINI_MODELS = [
 ]
 DEEPSEEK_MODELS = ["deepseek-flash", "deepseek-v4-pro"]
 ANTHROPIC_MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5"]
+DICTATION_MODES = [("Imla", "imla"), ("Prompt", "prompt"), ("Raw", "raw")]
 # agy's model ids carry the reasoning effort in their suffix, which is why one
 # model appears here at more than one level. The same list seeds two boxes:
 # cleanup, which wants the bottom rung, and the agent, which sometimes does not.
@@ -1631,6 +1632,15 @@ class SettingsWindow(QDialog):
             QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.cleanup_enabled = QCheckBox(t("Clean the transcript with a model"))
         orr_form.addRow("", self.cleanup_enabled)
+        # What Start and stop dictates in; the indicator's chips and the tray
+        # change the same setting.
+        self.dictation_mode = QComboBox()
+        for label, mode in DICTATION_MODES:
+            self.dictation_mode.addItem(t(label), mode)
+        self.dictation_mode.setToolTip(t(
+            "Imla: your own sentences, tidied. Prompt: what you said, rewritten "
+            "as a prompt for an AI model. Raw: the transcript exactly as heard."))
+        orr_form.addRow(t("Mode"), self.dictation_mode)
 
         self.cleanup_provider = QComboBox()
         for label, value in CLEANUP_PROVIDERS:
@@ -1837,6 +1847,19 @@ class SettingsWindow(QDialog):
         self.transcribe_prompt = QPlainTextEdit()
         self.transcribe_prompt.setMaximumHeight(90)
         layout.addWidget(self.transcribe_prompt)
+
+        phrases = QLabel(t("Your own expressions, one per line as \u201cexpression - "
+                           "what it means\u201d. Imla keeps them as you said them; "
+                           "Prompt writes what they mean, for a model that has never "
+                           "heard them."))
+        phrases.setWordWrap(True)
+        layout.addWidget(phrases)
+        layout.addWidget(QLabel(t("My expressions")))
+        self.personal_style = QPlainTextEdit()
+        self.personal_style.setMaximumHeight(90)
+        self.personal_style.setPlaceholderText(
+            t("gulballig yapmak - garip, alışılmadık işler yapmak"))
+        layout.addWidget(self.personal_style)
         return page
 
     def _assistant_tab(self):
@@ -2338,6 +2361,18 @@ class SettingsWindow(QDialog):
             form, "toggle", t("Start and stop"),
             t("No global shortcut installed."), placeholder="Ctrl+Space",
         )
+        self._shortcut_row(
+            form, "prompt", t("Dictate a prompt"),
+            t("No global shortcut installed."),
+            tooltip=t("Starts and stops a dictation in Prompt mode, whatever "
+                      "mode Start and stop is set to."),
+        )
+        self._shortcut_row(
+            form, "raw", t("Dictate raw"),
+            t("No global shortcut installed."),
+            tooltip=t("Starts and stops a dictation that is pasted exactly as "
+                      "heard, with no model in between."),
+        )
         # The point of holding a recording is that something else came up, and
         # something else is exactly when a hand is not free for a menu.
         self._shortcut_row(
@@ -2631,6 +2666,8 @@ class SettingsWindow(QDialog):
             self._refresh_processing_devices()
 
         self.cleanup_enabled.setChecked(conf["cleanup_enabled"])
+        index = self.dictation_mode.findData(cfg.dictation_mode(conf))
+        self.dictation_mode.setCurrentIndex(max(0, index))
         self.cleanup_model.setCurrentText(conf["cleanup_model"])
         self.cleanup_gemini_model.setCurrentText(
             conf["cleanup_gemini_model"] or cfg.DEFAULTS["cleanup_gemini_model"]
@@ -2678,6 +2715,7 @@ class SettingsWindow(QDialog):
             conf["file_cleanup_prompt"] or self._loaded_defaults["file"]
         )
         self.transcribe_prompt.setPlainText(conf["transcribe_prompt"])
+        self.personal_style.setPlainText(conf["personal_style"])
 
         self._select_data(self.assistant_provider, conf["assistant_provider"])
         self.assistant_model.setCurrentText(conf["assistant_model"])
@@ -2786,6 +2824,7 @@ class SettingsWindow(QDialog):
             conf["local_threads"] = self.local_threads.value()
 
         conf["cleanup_enabled"] = self.cleanup_enabled.isChecked()
+        conf["dictation_mode"] = self.dictation_mode.currentData() or "imla"
         conf["cleanup_provider"] = self.cleanup_provider.currentData() or "openrouter"
         conf["cleanup_model"] = self.cleanup_model.currentText().strip()
         conf["cleanup_gemini_model"] = (
@@ -2844,6 +2883,7 @@ class SettingsWindow(QDialog):
             self._loaded_defaults["file"], cfg.default_file_cleanup_prompt())
             else file_prompt)
         conf["transcribe_prompt"] = self.transcribe_prompt.toPlainText().strip()
+        conf["personal_style"] = self.personal_style.toPlainText().strip()
 
         conf["assistant_provider"] = self.assistant_provider.currentData() or "claude"
         conf["assistant_model"] = (self.assistant_model.currentText().strip()

@@ -1187,6 +1187,12 @@ def build_parser():
     leaf(subs, "pause", "hold the recording, or take it up again"
          ).set_defaults(func=cmd_plain)
     leaf(subs, "cancel", "throw away the recording").set_defaults(func=cmd_cancel)
+    # The fork's mode keys: start or stop a dictation in one mode, whatever
+    # Settings has chosen. `prompt` was already the verb that prints the rules.
+    leaf(subs, "dictate-prompt", "start or stop a dictation in prompt mode"
+         ).set_defaults(func=cmd_plain)
+    leaf(subs, "dictate-raw", "start or stop a dictation of the raw transcript"
+         ).set_defaults(func=cmd_plain)
 
     # --- the agent --------------------------------------------------------
     ask = leaf(subs, "ask", "put a command to the agent")

@@ -19,6 +19,15 @@ MARGIN = 28
 GAP = 10        # between two indicators sharing a corner
 FOLLOW_EVERY = 8   # ticks between two looks for the pointer: about four a second
 
+# The fork's mode chips, drawn on a dictation's ribbon: the letter on the chip,
+# and the name the tooltip-less chip stands for. Clicking one changes what the
+# recording under way becomes and what the next one defaults to.
+MODES = (("imla", "İ"), ("prompt", "P"), ("raw", "H"))
+CHIP_W = 22.0
+CHIP_H = 20.0
+CHIP_GAP = 4.0
+CHIPS_W = len(MODES) * CHIP_W + (len(MODES) - 1) * CHIP_GAP + 10.0
+
 STATE_ROLES = {"recording": "rec", "asking": "ask", "meeting": "rec", "busy": "accent",
                "done": "ok", "warning": "warn", "error": "err"}
 LIVE = ("recording", "asking", "meeting")
@@ -87,8 +96,14 @@ class Overlay(QWidget):
     under way at the same time and still both be visible."""
 
     def __init__(self, corner="bottom-left", below=None, dismissable=False,
-                 screen_name="", follow_pointer=False, theme_name=theme.DEFAULT):
+                 screen_name="", follow_pointer=False, theme_name=theme.DEFAULT,
+                 mode_buttons=False, on_mode=None):
         super().__init__(None)
+        # Whether a dictation's ribbon carries the mode chips, and who hears a
+        # click on one. The mode is what the chips show as chosen.
+        self.mode_buttons = mode_buttons
+        self.on_mode = on_mode
+        self.mode = "imla"
         self.set_theme(theme_name)
         self.corner = corner
         self.screen_name = screen_name
@@ -137,9 +152,11 @@ class Overlay(QWidget):
         # the window is created and cannot be turned off later without the
         # window being torn down and built again. Concealed indicators are
         # unmapped in _conceal so they cannot intercept clicks.
+        # The chips need the click too. WindowDoesNotAcceptFocus above still
+        # keeps the focus, and with it the paste, where the typing is.
         if dismissable:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-        else:
+        elif not mode_buttons:
             flags |= Qt.WindowType.WindowTransparentForInput
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -214,7 +231,35 @@ class Overlay(QWidget):
         self._hide_timer.stop()
         self._conceal()
 
+    def set_mode(self, mode):
+        if mode in dict(MODES):
+            self.mode = mode
+            self.update()
+
+    def _chips_shown(self):
+        return self.mode_buttons and self.state == "recording"
+
+    def _chip_rects(self):
+        """[(mode, letter, rect)], right to left from just before the clock."""
+        right = self.width() - 58.0 - 4.0
+        mid = self.height() / 2
+        out = []
+        for index, (mode, letter) in enumerate(reversed(MODES)):
+            x = right - (index + 1) * CHIP_W - index * CHIP_GAP
+            out.append((mode, letter, QRectF(x, mid - CHIP_H / 2, CHIP_W, CHIP_H)))
+        return list(reversed(out))
+
     def mousePressEvent(self, event):
+        if self._chips_shown():
+            point = event.position()
+            for mode, _letter, rect in self._chip_rects():
+                if rect.contains(point):
+                    self.set_mode(mode)
+                    if self.on_mode is not None:
+                        self.on_mode(mode)
+                    break
+            event.accept()
+            return
         # Only a job in progress can be waved away. A recording is short and
         # ending it by accident would cost the words; an outcome goes on its own.
         if self.dismissable and self.state == "busy":
@@ -277,6 +322,8 @@ class Overlay(QWidget):
         if self.state in LIVE:
             # A meeting runs long enough to need an hours field.
             width = MIN_WIDTH + (24 if self.state == "meeting" else 0)
+            if self._chips_shown():
+                width += int(CHIPS_W)
         else:
             metrics = QFontMetrics(self._label_font())
             extra = 76 + (18 if self._can_dismiss else 0)
@@ -393,6 +440,8 @@ class Overlay(QWidget):
         if self.state in LIVE:
             self._draw_waveform(painter, accent)
             self._draw_time(painter)
+            if self._chips_shown():
+                self._draw_chips(painter, accent)
         else:
             self._draw_message(painter)
             if self._can_dismiss:
@@ -459,6 +508,8 @@ class Overlay(QWidget):
         # the ribbon has to stop earlier.
         left = 46.0
         right = self.width() - (74.0 if self.state == "meeting" else 58.0)
+        if self._chips_shown():
+            right -= CHIPS_W
         bar_w = 2.6
         gap = (right - left - BARS * bar_w) / max(1, BARS - 1)
         return left, bar_w, bar_w + gap
@@ -517,6 +568,21 @@ class Overlay(QWidget):
             int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight),
             text,
         )
+
+    def _draw_chips(self, painter, accent):
+        font = QFont(self.font())
+        font.setPointSizeF(9.0)
+        font.setBold(True)
+        painter.setFont(font)
+        for mode, letter, rect in self._chip_rects():
+            chosen = mode == self.mode
+            painter.setPen(QPen(accent if chosen else self.colors["border"], 1))
+            fill = QColor(accent)
+            fill.setAlphaF(0.85 if chosen else 0.0)
+            painter.setBrush(fill)
+            painter.drawRoundedRect(rect, 5, 5)
+            painter.setPen(self.colors["base"] if chosen else self.colors["muted"])
+            painter.drawText(rect, int(Qt.AlignmentFlag.AlignCenter), letter)
 
     @property
     def _can_dismiss(self):
