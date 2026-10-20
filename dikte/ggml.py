@@ -408,11 +408,12 @@ def _wanted_assets(program):
             # which is slow but is the only local option there is.
             cpu = ("whisper-blas-bin-x64.zip", "whisper-bin-x64.zip")
             if _has_nvidia():
-                # CUDA 11.8 rather than 12.4: the same speed on an RTX card at
-                # less than half the download. Both of the names it has been
-                # published under, the newer first.
-                return ("whisper-bin-win-cuda-11.8.0-x64.zip",
-                        "whisper-cublas-11.8.0-bin-x64.zip") + cpu
+                # CUDA 12.4, not 11.8: the 11.8 archive leaves out
+                # cublas64_11.dll, so its ggml-cuda.dll never loads and the
+                # server quietly runs on the CPU. Both of the names the 12.4
+                # build has been published under, the newer first.
+                return ("whisper-bin-win-cuda-12.4.0-x64.zip",
+                        "whisper-cublas-12.4.0-bin-x64.zip") + cpu
             return cpu
         if _has_vulkan() and arch == "x64":
             return ("bin-win-vulkan-x64.zip", f"bin-win-cpu-{arch}.zip")

@@ -1954,8 +1954,8 @@ class WindowsAssets(Local):
     def test_an_nvidia_card_gets_the_cuda_build_first(self):
         self.patch_attr(ggml, "_has_nvidia", lambda: True)
         self.assertEqual(ggml._wanted_assets(ggml.WHISPER),
-                         ("whisper-bin-win-cuda-11.8.0-x64.zip",
-                          "whisper-cublas-11.8.0-bin-x64.zip",
+                         ("whisper-bin-win-cuda-12.4.0-x64.zip",
+                          "whisper-cublas-12.4.0-bin-x64.zip",
                           "whisper-blas-bin-x64.zip", "whisper-bin-x64.zip"))
 
     def test_llama_takes_the_vulkan_build_when_there_is_a_loader(self):
