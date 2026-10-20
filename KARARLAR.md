@@ -12,3 +12,6 @@
 | 2026-10-20 | Tabirler | Liste boş başlar, kullanımla dolar; Prompt modunda anlamına çevrilir | Ali'nin tercihi |
 | 2026-10-20 | Varsayılan | Kodda temizleme varsayılanı OpenRouter kalır; Ali'nin ayarı `anthropic` | Upstream testleri ve birleştirmeler bozulmasın |
 | 2026-10-20 | Doğrulama | `prompt` CLI fiili zaten var; mod fiilleri `dictate-prompt` / `dictate-raw` | Çakışma |
+| 2026-10-20 | Fikir | Fikir modu yapıştırmaz; ham metni yakalama kimliğiyle `idea_dir`/YYYY-AA-GG.md'ye ekler | AliOS gelen-kutusu ve Fikir Kasası sözleşmesi |
+| 2026-10-20 | AliOS | Sesli komut `Ctrl+Alt+A`, Claude Code `assistant_dir` = AliOS | Ali'nin onayı |
+| 2026-10-20 | Dağıtım | Herkese açık fork Ali91Geyik/AliDikte (master); kurulum adı AliDikte, kimlik `io.github.ali91geyik.alidikte`, sürüm 1.0.0; CI yalnızca Windows derler | Ali'nin onayı |
