@@ -13,10 +13,13 @@ Son güncelleme: 2026-10-20
 - Windows + NVIDIA: whisper.cpp CUDA 12.4 derlemesi indirilir; Ayarlar "CUDA" gösterir
 - Ölçüm: 8 sn ses GPU'da ~4,5 sn (açılış dahil); ilk gerçek dikte 4,2 sn ses → 1,3 sn (temizleme dahil)
 
+## Yayın
+- v1.0.0: https://github.com/Ali91Geyik/AliDikte/releases/tag/v1.0.0 (AliDikte-1.0.0-x64-setup.exe, 48 MB, GitHub Actions)
+- Yeni sürüm: `__version__`'ı artır, `vX.Y.Z` etiketi it; upstream etiketleri çekilmez (`remote.upstream.tagOpt --no-tags`)
+- AliOS bağlantısı Ali'nin makinesinde ayarlı (`aliOS-bagla.ps1`)
+
 ## Açık işler
 - [ ] Ham kısayolu: `Ctrl+Alt+R` başka programda; yeni tuş Ali'de
-- [ ] AliOS bağlantı ayarı Ali'nin makinesinde (`aliOS-bagla.ps1`, repoda değil)
-- [ ] Fork'ta GitHub Actions açılınca `v1.0.0` etiketiyle kurulum dosyası derlenecek
 
 ## Bilinen
 - 4 Homebrew testi Windows'ta sembolik bağ izni olmadığı için hata verir (upstream'de de böyle)
