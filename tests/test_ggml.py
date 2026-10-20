@@ -1944,11 +1944,19 @@ class WindowsAssets(Local):
         super().setUp()
         self.patch_attr(sys, "platform", "win32")
         self.patch_attr(ggml, "_arch", lambda: "x64")
+        self.patch_attr(ggml, "_has_nvidia", lambda: False)
 
     def test_whisper_prefers_the_blas_build(self):
         # On a plain CPU it transcribes about twice as fast as the stock one.
         self.assertEqual(ggml._wanted_assets(ggml.WHISPER),
                          ("whisper-blas-bin-x64.zip", "whisper-bin-x64.zip"))
+
+    def test_an_nvidia_card_gets_the_cuda_build_first(self):
+        self.patch_attr(ggml, "_has_nvidia", lambda: True)
+        self.assertEqual(ggml._wanted_assets(ggml.WHISPER),
+                         ("whisper-bin-win-cuda-11.8.0-x64.zip",
+                          "whisper-cublas-11.8.0-bin-x64.zip",
+                          "whisper-blas-bin-x64.zip", "whisper-bin-x64.zip"))
 
     def test_llama_takes_the_vulkan_build_when_there_is_a_loader(self):
         self.patch_attr(ggml, "_has_vulkan", lambda: True)

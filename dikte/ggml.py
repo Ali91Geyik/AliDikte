@@ -380,6 +380,12 @@ def _has_vulkan():
                     and ctypes.util.find_library("vulkan-1")))
 
 
+def _has_nvidia():
+    """Whether an NVIDIA driver is installed on Windows, which is what the CUDA
+    build of whisper.cpp needs: nvcuda.dll ships with the driver."""
+    return sys.platform == "win32" and bool(ctypes.util.find_library("nvcuda"))
+
+
 def _wanted_assets(program):
     """Asset name endings to accept, best first.
 
@@ -400,7 +406,14 @@ def _wanted_assets(program):
             # x64 whatever this machine is, because whisper.cpp publishes no
             # arm64 build for Windows: a Snapdragon runs this one emulated,
             # which is slow but is the only local option there is.
-            return ("whisper-blas-bin-x64.zip", "whisper-bin-x64.zip")
+            cpu = ("whisper-blas-bin-x64.zip", "whisper-bin-x64.zip")
+            if _has_nvidia():
+                # CUDA 11.8 rather than 12.4: the same speed on an RTX card at
+                # less than half the download. Both of the names it has been
+                # published under, the newer first.
+                return ("whisper-bin-win-cuda-11.8.0-x64.zip",
+                        "whisper-cublas-11.8.0-bin-x64.zip") + cpu
+            return cpu
         if _has_vulkan() and arch == "x64":
             return ("bin-win-vulkan-x64.zip", f"bin-win-cpu-{arch}.zip")
         return (f"bin-win-cpu-{arch}.zip",)
