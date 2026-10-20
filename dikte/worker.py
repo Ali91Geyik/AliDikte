@@ -20,6 +20,7 @@ from . import api
 from . import assistant
 from . import audio
 from . import cleanup
+from . import ideas
 from . import config as cfg
 from . import i18n
 from . import paste
@@ -251,9 +252,10 @@ class Pipeline(QObject):
             # Claude reads through “eee” and “hani” without help, so a dictation
             # on its way there is normally sent as it was heard, one API call and
             # a second or two lighter.
-            # Raw mode is the transcript exactly as heard, so no model sees it.
+            # Raw mode is the transcript exactly as heard, so no model sees it,
+            # and neither does an idea: the vault keeps what was said verbatim.
             if (conf["assistant_cleanup"] if ask
-                    else conf["cleanup_enabled"] and mode != "raw"):
+                    else conf["cleanup_enabled"] and mode not in ("raw", "fikir")):
                 self.stage.emit(t("Cleaning up…"))
                 cleaned = True
                 try:
@@ -292,7 +294,7 @@ class Pipeline(QObject):
                 "model": target.model or target.provider,
                 "cleanup_model": cleanup.model(conf) if cleaned else "",
                 "cleanup_error": warning,
-                "mode": "ask" if ask else "",
+                "mode": "ask" if ask else ("fikir" if mode == "fikir" else ""),
                 "question": question,
                 "assistant": assistant.provider(conf) if ask else "",
                 "assistant_model": assistant.model(conf) if ask else "",
@@ -311,6 +313,17 @@ class Pipeline(QObject):
                 cfg.trim_history(conf["history_limit"])
             except OSError as exc:
                 print(f"dikte: could not trim the history: {exc}", file=sys.stderr)
+
+            if mode == "fikir" and not ask:
+                # Kept, not pasted: the window in front has nothing to do with it.
+                self.stage.emit(t("Saving the idea…"))
+                try:
+                    ideas.save(text, conf)
+                except OSError as exc:
+                    raise api.ApiError(t("Could not save the idea: {error}",
+                                         error=exc)) from exc
+                self.finished.emit(raw, text, warning, speech_language)
+                return
 
             with _paste_lock:
                 previous = (paste.read_clipboard()

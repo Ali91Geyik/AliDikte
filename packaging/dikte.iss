@@ -22,19 +22,21 @@
 ; The identifier Add/Remove Programs files this under, and what an update
 ; recognises the older installation by. The same one the Mac's login item and
 ; the bundle use, and like those it never changes.
-AppId=io.github.yusufipk.dikte
-AppName=Dikte
+; AliDikte has an identifier of its own, so that it installs beside an upstream
+; Dikte rather than over it. Based on Dikte by Yusuf Ipek (GPL-3.0).
+AppId=io.github.ali91geyik.alidikte
+AppName=AliDikte
 AppVersion={#Version}
-AppPublisher=Yusuf Ipek
-AppSupportURL=https://github.com/yusufipk/dikte
-DefaultDirName={localappdata}\Programs\Dikte
-DefaultGroupName=Dikte
+AppPublisher=Ali Geyik
+AppSupportURL=https://github.com/Ali91Geyik/AliDikte
+DefaultDirName={localappdata}\Programs\AliDikte
+DefaultGroupName=AliDikte
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=Dikte-{#Version}-x64-setup
+OutputBaseFilename=AliDikte-{#Version}-x64-setup
 SetupIconFile={#Icon}
 UninstallDisplayIcon={app}\Dikte.exe
 WizardStyle=modern
@@ -54,7 +56,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 ; On by default: Dikte is a tray application holding a global shortcut, and one
 ; that is not running when you press the key is one that does nothing.
-Name: "autostart"; Description: "Start Dikte when I sign in"
+Name: "autostart"; Description: "Start AliDikte when I sign in"
 
 [Files]
 Source: "{#Source}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -67,7 +69,7 @@ Source: "{#Source}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Type: files; Name: "{userstartup}\Dikte.lnk"; Tasks: autostart
 
 [Icons]
-Name: "{autoprograms}\Dikte"; Filename: "{app}\Dikte.exe"
+Name: "{autoprograms}\AliDikte"; Filename: "{app}\Dikte.exe"
 
 [Registry]
 ; Starting at sign-in, as a registry value rather than a shortcut in the
@@ -84,7 +86,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     Flags: deletevalue uninsdeletevalue; Tasks: not autostart
 
 [Run]
-Filename: "{app}\Dikte.exe"; Description: "Start Dikte"; \
+Filename: "{app}\Dikte.exe"; Description: "Start AliDikte"; \
     Flags: nowait postinstall skipifsilent
 
 [Code]

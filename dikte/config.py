@@ -235,8 +235,9 @@ GLOSSARY_RULE_TR = ("\n\nKONUŞMACININ KULLANDIĞI İSİM VE TERİMLER\n{glossar
 # The fork's dictation modes. "imla" is the cleanup above: the speaker's own
 # sentences, tidied. "prompt" goes further and turns what was said into a
 # request written for an AI model to act on. "raw" sends the transcript as it
-# was heard, with no model in between.
-DICTATION_MODES = ("imla", "prompt", "raw")
+# was heard, with no model in between. "fikir" keeps the raw transcript as an
+# idea in a folder (ideas.py) instead of pasting it.
+DICTATION_MODES = ("imla", "prompt", "raw", "fikir")
 
 PROMPT_MODE_PROMPT_EN = """You turn a spoken request into a well-written prompt
 for an AI model. You are given a raw dictation transcript in which the speaker
@@ -570,6 +571,7 @@ DEFAULTS = {
     "cleanup_enabled": True,
     "dictation_mode": "imla",       # a name in DICTATION_MODES
     "personal_style": "",           # "expression - meaning" per line; empty -> no rule
+    "idea_dir": "",                 # where Fikir mode writes; empty -> ideas.default_dir()
     "cleanup_provider": "openrouter",  # a name in cleanup.PROVIDERS
     "cleanup_model": "google/gemini-3.5-flash-lite",
     "cleanup_claude_model": "haiku",   # Claude Code: an alias, or a full model id

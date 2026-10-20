@@ -38,7 +38,7 @@ class ModeChips(DikteTest):
         for mode, _letter, rect in box._chip_rects():
             self.click(box, rect.center())
             self.assertEqual(box.mode, mode)
-        self.assertEqual(heard, ["imla", "prompt", "raw"])
+        self.assertEqual(heard, ["imla", "prompt", "raw", "fikir"])
 
     def test_a_click_beside_the_chips_changes_nothing(self):
         box, heard = self.make()

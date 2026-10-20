@@ -271,7 +271,8 @@ class Dikte:
         self.mode_menu = self.menu.addMenu(t("Dictation mode"))
         self.mode_group = QActionGroup(self.mode_menu)
         self.mode_actions = {}
-        for label, mode in (("Imla", "imla"), ("Prompt", "prompt"), ("Raw", "raw")):
+        for label, mode in (("Imla", "imla"), ("Prompt", "prompt"), ("Raw", "raw"),
+                            ("Idea", "fikir")):
             action = QAction(t(label), self.mode_menu, checkable=True)
             action.triggered.connect(lambda _checked, m=mode: self.set_dictation_mode(m))
             self.mode_group.addAction(action)

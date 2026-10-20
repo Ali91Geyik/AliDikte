@@ -38,7 +38,7 @@ import urllib.request
 from . import ggml
 from .i18n import t
 
-APP_URL = "https://github.com/yusufipk/dikte"
+APP_URL = "https://github.com/Ali91Geyik/AliDikte"
 USER_AGENT = f"dikte/1.0 (+{APP_URL})"
 OPENAI_URL = "https://api.openai.com/v1"
 GROQ_URL = "https://api.groq.com/openai/v1"

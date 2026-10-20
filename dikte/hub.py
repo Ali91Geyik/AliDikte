@@ -29,7 +29,7 @@ from .i18n import t
 GITHUB_API = "https://api.github.com"
 HF_API = "https://huggingface.co/api"
 HF_FILES = "https://huggingface.co"
-USER_AGENT = "dikte/1.0 (+https://github.com/yusufipk/dikte)"
+USER_AGENT = "alidikte/1.0 (+https://github.com/Ali91Geyik/AliDikte)"
 
 CACHE_DIR = paths.cache_dir()
 # Long enough that opening the settings window twice in an evening asks nobody

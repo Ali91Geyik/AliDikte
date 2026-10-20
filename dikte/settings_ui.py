@@ -27,6 +27,7 @@ from . import filetranscribe
 from . import ggml
 from . import hardware
 from . import hotkey
+from . import ideas
 from . import hub
 from . import i18n
 from . import ipc
@@ -87,7 +88,8 @@ GEMINI_MODELS = [
 ]
 DEEPSEEK_MODELS = ["deepseek-flash", "deepseek-v4-pro"]
 ANTHROPIC_MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5"]
-DICTATION_MODES = [("Imla", "imla"), ("Prompt", "prompt"), ("Raw", "raw")]
+DICTATION_MODES = [("Imla", "imla"), ("Prompt", "prompt"), ("Raw", "raw"),
+                   ("Idea", "fikir")]
 # agy's model ids carry the reasoning effort in their suffix, which is why one
 # model appears here at more than one level. The same list seeds two boxes:
 # cleanup, which wants the bottom rung, and the agent, which sometimes does not.
@@ -1641,6 +1643,12 @@ class SettingsWindow(QDialog):
             "Imla: your own sentences, tidied. Prompt: what you said, rewritten "
             "as a prompt for an AI model. Raw: the transcript exactly as heard."))
         orr_form.addRow(t("Mode"), self.dictation_mode)
+        self.idea_dir = QLineEdit()
+        self.idea_dir.setPlaceholderText(str(ideas.default_dir()))
+        self.idea_dir.setToolTip(t(
+            "Idea mode does not paste: it adds what you said, word for word, to "
+            "a dated file in this folder."))
+        orr_form.addRow(t("Idea folder"), self.idea_dir)
 
         self.cleanup_provider = QComboBox()
         for label, value in CLEANUP_PROVIDERS:
@@ -2716,6 +2724,7 @@ class SettingsWindow(QDialog):
         )
         self.transcribe_prompt.setPlainText(conf["transcribe_prompt"])
         self.personal_style.setPlainText(conf["personal_style"])
+        self.idea_dir.setText(conf["idea_dir"])
 
         self._select_data(self.assistant_provider, conf["assistant_provider"])
         self.assistant_model.setCurrentText(conf["assistant_model"])
@@ -2884,6 +2893,7 @@ class SettingsWindow(QDialog):
             else file_prompt)
         conf["transcribe_prompt"] = self.transcribe_prompt.toPlainText().strip()
         conf["personal_style"] = self.personal_style.toPlainText().strip()
+        conf["idea_dir"] = self.idea_dir.text().strip()
 
         conf["assistant_provider"] = self.assistant_provider.currentData() or "claude"
         conf["assistant_model"] = (self.assistant_model.currentText().strip()

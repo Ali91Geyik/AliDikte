@@ -368,6 +368,13 @@ TR = {
     "Starts and stops a dictation that is pasted exactly as heard, with no model in between.":
         "Arada hiçbir model olmadan, duyulduğu gibi yapıştırılan bir dikte başlatır ve durdurur.",
     "Dictation mode": "Dikte modu",
+    "Idea": "Fikir",
+    "Idea folder": "Fikir klasörü",
+    "Idea mode does not paste: it adds what you said, word for word, to a dated file in this folder.":
+        "Fikir modu yapıştırmaz: söylediğini kelimesi kelimesine bu klasördeki "
+        "günün dosyasına ekler.",
+    "Saving the idea…": "Fikir kaydediliyor…",
+    "Could not save the idea: {error}": "Fikir kaydedilemedi: {error}",
     "Runs on OpenCode Go.": "OpenCode Go üzerinde çalışır.",
     "Runs on Requesty.": "Requesty üzerinde çalışır.",
     "Runs on your custom server.": "Özel sunucunda çalışır.",

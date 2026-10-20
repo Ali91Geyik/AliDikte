@@ -15,7 +15,7 @@ from tests.support import DikteTest, fake_urlopen, url_error
 
 RELEASE = {
     "tag_name": "v1.4.0",
-    "html_url": "https://github.com/yusufipk/dikte/releases/tag/v1.4.0",
+    "html_url": "https://github.com/Ali91Geyik/AliDikte/releases/tag/v1.4.0",
     "published_at": "2026-08-01T10:00:00Z",
 }
 
@@ -72,7 +72,7 @@ class Asking(DikteTest):
         self.assertEqual(release.url, RELEASE["html_url"])
         self.assertEqual(
             calls[0].full_url,
-            "https://api.github.com/repos/yusufipk/dikte/releases/latest")
+            "https://api.github.com/repos/Ali91Geyik/AliDikte/releases/latest")
 
     def test_a_release_with_no_page_falls_back_to_the_redirect(self):
         with fake_urlopen({"tag_name": "v1.4.0"}):

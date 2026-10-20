@@ -22,7 +22,7 @@ FOLLOW_EVERY = 8   # ticks between two looks for the pointer: about four a secon
 # The fork's mode chips, drawn on a dictation's ribbon: the letter on the chip,
 # and the name the tooltip-less chip stands for. Clicking one changes what the
 # recording under way becomes and what the next one defaults to.
-MODES = (("imla", "İ"), ("prompt", "P"), ("raw", "H"))
+MODES = (("imla", "İ"), ("prompt", "P"), ("raw", "H"), ("fikir", "F"))
 CHIP_W = 22.0
 CHIP_H = 20.0
 CHIP_GAP = 4.0

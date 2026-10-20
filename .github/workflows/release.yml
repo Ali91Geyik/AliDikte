@@ -142,25 +142,19 @@ jobs:
           ls -la downloads
 
           notes=$(cat <<'EOF'
-          Linux: download the AppImage, `chmod +x` it, run it. It writes its own
-          menu entry and starts with you at login the first time it runs, and it
-          leaves an installation that is already on the machine alone.
+          AliDikte (Windows): download AliDikte-<version>-x64-setup.exe and run it.
+          It installs for your account alone, asks for no administrator, carries
+          the ffmpeg recording needs, and adds a Start Menu entry and a start at
+          sign-in. It is not signed, so SmartScreen offers only "Don't run" until
+          you press More info. Add/Remove Programs uninstalls it.
 
-          macOS: open the .dmg and drag Dikte to Applications. It is not signed
-          with an Apple certificate, so the first launch is refused: open System
-          Settings, Privacy & Security, and press Open Anyway. Or, in a terminal:
-          `xattr -dr com.apple.quarantine /Applications/Dikte.app`. Take the arm64
-          image for an Apple silicon Mac and the x86_64 one for an Intel Mac.
-          Recording, transcribing and pasting need the microphone and
-          Accessibility permissions, which macOS asks for the first time each is
-          used. It asks again after an update, because an application signed with
-          no certificate is one macOS has never seen before.
+          First run: Settings -> API and models. Download whisper.cpp and the
+          ggml-large-v3-turbo-q5_0 model (an NVIDIA card gets the CUDA build), set
+          the cleanup to "Claude API" and enter your own Anthropic API key, then
+          press Apply changes. Ctrl+Space dictates in the chosen mode,
+          Ctrl+Shift+Space as a prompt.
 
-          Windows: run the setup, which installs for your account alone and asks
-          for no administrator. It carries the ffmpeg recording needs and adds a
-          Start Menu entry, a `dikte` command and, unless you untick it, a start
-          at sign-in. It is not signed either, so SmartScreen offers only "Don't
-          run" until you press More info. Add/Remove Programs uninstalls it.
+          Based on Dikte by Yusuf Ipek (https://github.com/yusufipk/dikte), GPL-3.0.
           EOF
           )
 
@@ -177,7 +171,7 @@ jobs:
           $notes"
           else
             gh release create "$TAG" downloads/* \
-              --title "Dikte $VERSION" \
+              --title "AliDikte $VERSION" \
               --generate-notes \
               --notes "$notes"
           fi

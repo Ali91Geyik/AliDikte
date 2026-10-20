@@ -31,7 +31,9 @@ from . import __version__
 from . import hub
 from . import paths
 
-REPO = "yusufipk/dikte"
+# The fork's own releases: an update offered from upstream would replace this
+# build with one that has none of its modes.
+REPO = "Ali91Geyik/AliDikte"
 # Where somebody is sent. GitHub redirects this to whatever the newest release
 # is, so it stays right without anybody writing a number into it.
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"

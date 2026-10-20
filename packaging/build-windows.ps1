@@ -106,4 +106,4 @@ if (-not (Test-Path $iscc)) {
   (Join-Path $root "packaging\dikte.iss")
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
-Write-Host "dist\Dikte-$version-x64-setup.exe"
+Write-Host "dist\AliDikte-$version-x64-setup.exe"
