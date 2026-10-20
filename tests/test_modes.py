@@ -42,7 +42,13 @@ class Modes(DikteTest):
 
     def test_no_style_means_no_style_rule(self):
         conf = cfg.Config()
-        self.assertNotIn("KONUŞMA TARZI", conf.cleanup_prompt(speech="tr"))
+        self.assertNotIn("TABİRLERİ", conf.cleanup_prompt(speech="tr"))
+
+    def test_imla_keeps_the_expression_and_prompt_mode_translates_it(self):
+        conf = cfg.Config()
+        conf["personal_style"] = "gulballig yapmak - garip, alışılmadık işler yapmak"
+        self.assertIn("söylediği gibi", conf.cleanup_prompt(speech="tr"))
+        self.assertIn("anlamını", conf.cleanup_prompt(speech="tr", mode="prompt"))
 
 
 if __name__ == "__main__":
