@@ -57,6 +57,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; On by default: Dikte is a tray application holding a global shortcut, and one
 ; that is not running when you press the key is one that does nothing.
 Name: "autostart"; Description: "Start AliDikte when I sign in"
+; Also on by default: AliDikte is meant to be one click away.
+Name: "desktopicon"; Description: "Create a desktop shortcut"
 
 [Files]
 Source: "{#Source}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -70,6 +72,7 @@ Type: files; Name: "{userstartup}\Dikte.lnk"; Tasks: autostart
 
 [Icons]
 Name: "{autoprograms}\AliDikte"; Filename: "{app}\Dikte.exe"
+Name: "{autodesktop}\AliDikte"; Filename: "{app}\Dikte.exe"; Tasks: desktopicon
 
 [Registry]
 ; Starting at sign-in, as a registry value rather than a shortcut in the

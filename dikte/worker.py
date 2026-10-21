@@ -254,13 +254,17 @@ class Pipeline(QObject):
             # a second or two lighter.
             # Raw mode is the transcript exactly as heard, so no model sees it,
             # and neither does an idea: the vault keeps what was said verbatim.
-            if (conf["assistant_cleanup"] if ask
+            bridge = ask and conf["claude_bridge"]
+            if (conf["assistant_cleanup"] or bridge if ask
                     else conf["cleanup_enabled"] and mode not in ("raw", "fikir")):
                 self.stage.emit(t("Cleaning up…"))
                 cleaned = True
+                # Through the bridge a command is written up as a prompt for
+                # Claude before it goes.
+                clean_mode = ("prompt" if bridge else "imla") if ask else mode
                 try:
                     text = cleanup.run(raw, conf, conf.cleanup_prompt(
-                        speech=detected, mode="imla" if ask else mode))
+                        speech=detected, mode=clean_mode))
                 except api.ApiError as exc:
                     # Keep the transcript, but never let the failure pass unseen:
                     # a rejected key would otherwise look like working dictation.
@@ -280,7 +284,9 @@ class Pipeline(QObject):
                 )
                 warning = "\n".join(x for x in (warning, denied) if x)
 
-            wants_paste = (conf["assistant_paste"] if ask else conf["auto_paste"])
+            # The bridge shows its answer in a panel; there is nothing to paste.
+            wants_paste = ((conf["assistant_paste"] and not conf["claude_bridge"])
+                           if ask else conf["auto_paste"])
             if paste_override is not None:
                 wants_paste = paste_override
 

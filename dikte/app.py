@@ -58,6 +58,7 @@ from . import trayicon  # noqa: E402
 from . import update  # noqa: E402
 from .i18n import t  # noqa: E402
 from .meeting import MeetingPipeline  # noqa: E402
+from .answer_panel import AnswerPanel  # noqa: E402
 from .overlay import Overlay, active_screen  # noqa: E402
 from .settings_ui import SettingsWindow  # noqa: E402
 from .home_ui import HomeWindow  # noqa: E402
@@ -1279,6 +1280,8 @@ class Dikte:
 
     def _on_ask_finished(self, _raw, text, warning, speech_language):
         agent = assistant.display_name(self.conf)
+        if self.conf["claude_bridge"]:
+            self._show_bridge_answer(_raw, text, warning)
         if warning:
             # A tool the agent was not allowed to touch otherwise looks exactly
             # like a job that worked: the reply reads perfectly normal.
@@ -1301,6 +1304,25 @@ class Dikte:
         self._settle(ASK, {"ok": True, "answer": text, "question": _raw,
                            "warning": warning, "agent": agent,
                            "speech_language": speech_language})
+
+    def _show_bridge_answer(self, question, text, warning):
+        if getattr(self, "answer_panel", None) is None:
+            self.answer_panel = AnswerPanel(
+                self.conf["theme"],
+                on_continue=lambda: assistant.open_in_terminal(self.conf))
+        self.answer_panel.corner = self.conf["overlay_corner"]
+        self.answer_panel.set_theme(self.conf["theme"])
+        self.answer_panel.show_answer(
+            question, text, warning,
+            can_continue=assistant.terminal_command(self.conf) is not None)
+
+    def announce_ready(self):
+        self.tray.showMessage(
+            "AliDikte",
+            t("Ready. {dictate} to dictate, {ask} for Claude.",
+              dictate=self.conf["shortcut"] or "Ctrl+Space",
+              ask=self.conf["assistant_shortcut"] or t("the tray menu")),
+            QSystemTrayIcon.MessageIcon.Information, 5000)
 
     def _on_ask_cancelled(self):
         self.cues.play("failed")
@@ -1890,6 +1912,10 @@ def run_app(args):
     elif (command == "home" or not dikte.conf.transcribe_ready()
           or command == "autostart" and not dikte.conf["start_in_tray"]):
         dikte.open_home()
+    elif command == "autostart":
+        # Started at sign-in and sitting in the tray: say once that it is there
+        # and which keys reach it, so that the first use needs no looking.
+        QTimer.singleShot(1500, dikte.announce_ready)
     elif command == "toggle":
         QTimer.singleShot(0, dikte.toggle)
     elif command == "ask":

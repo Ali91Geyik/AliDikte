@@ -690,6 +690,10 @@ DEFAULTS = {
     "assistant_prompt": "",         # empty -> language-specific default
     "assistant_cleanup": False,     # the model reads through filler words fine
     "assistant_paste": True,        # paste the answer, not just copy it
+    # The fork's Claude bridge: the command is rewritten as a prompt first and
+    # the answer comes up in a panel with a way on to the terminal, instead of
+    # being pasted. Off leaves the command exactly as upstream runs it.
+    "claude_bridge": False,
     "assistant_session_minutes": 30,  # 0 -> every command starts fresh
     "assistant_timeout": 240,
 }

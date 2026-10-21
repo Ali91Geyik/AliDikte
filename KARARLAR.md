@@ -15,3 +15,5 @@
 | 2026-10-20 | Fikir | Fikir modu yapıştırmaz; ham metni yakalama kimliğiyle `idea_dir`/YYYY-AA-GG.md'ye ekler | AliOS gelen-kutusu ve Fikir Kasası sözleşmesi |
 | 2026-10-20 | AliOS | Sesli komut `Ctrl+Alt+A`, Claude Code `assistant_dir` = AliOS | Ali'nin onayı |
 | 2026-10-20 | Dağıtım | Herkese açık fork Ali91Geyik/AliDikte (master); kurulum adı AliDikte, kimlik `io.github.ali91geyik.alidikte`, sürüm 1.0.0; CI yalnızca Windows derler | Ali'nin onayı |
+| 2026-10-21 | Köprü | Claude köprüsü: Prompt modunda düzenle → Claude Code (arka plan, aynı oturum); cevap paneli + Terminalde devam et; masaüstü uygulamasına yazdırma yok | Ali'nin onayı; masaüstü uygulamasının resmi giriş yolu yok |
+| 2026-10-21 | Kurulum | Masaüstü kısayolu ve açılışta başlama kurulum dosyasında varsayılan | Ali'nin isteği |

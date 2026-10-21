@@ -13,6 +13,10 @@ Son güncelleme: 2026-10-20
 - Windows + NVIDIA: whisper.cpp CUDA 12.4 derlemesi indirilir; Ayarlar "CUDA" gösterir
 - Ölçüm: 8 sn ses GPU'da ~4,5 sn (açılış dahil); ilk gerçek dikte 4,2 sn ses → 1,3 sn (temizleme dahil)
 
+## Sürüm 1.1
+- Claude köprüsü (Ayarlar → Agent → "Claude köprüsü"): komut Prompt modunda düzenlenir, AliOS'ta Claude Code'a gider; cevap panelde (Kopyala, Terminalde devam et → `wt claude --resume`)
+- Kurulum: masaüstü kısayolu (varsayılan açık), açılışta başlama; açılışta "Hazır" bildirimi
+
 ## Yayın
 - v1.0.0: https://github.com/Ali91Geyik/AliDikte/releases/tag/v1.0.0 (AliDikte-1.0.0-x64-setup.exe, 48 MB, GitHub Actions)
 - Yeni sürüm: `__version__`'ı artır, `vX.Y.Z` etiketi it; upstream etiketleri çekilmez (`remote.upstream.tagOpt --no-tags`)

@@ -282,6 +282,31 @@ def ask(prompt, conf, on_stage=None, should_stop=None):
         return run(prompt, conf, "", on_stage, should_stop)
 
 
+def terminal_command(conf):
+    """What opens the current Claude Code conversation in a terminal, as an
+    argument list, or None when there is no Claude conversation to open.
+
+    The bridge's way on: the same session the panel's answer came from, now
+    where it can be watched and where Claude can ask before it acts."""
+    if provider(conf) != "claude" or not shutil.which("claude"):
+        return None
+    session = read_session("claude", conf["assistant_session_minutes"] * 60)
+    claude = ["claude", "--resume", session] if session else ["claude"]
+    if shutil.which("wt"):
+        return ["wt", "-d", working_dir(conf), *claude]
+    return claude
+
+
+def open_in_terminal(conf):
+    """Open it; False when there is nothing to open."""
+    cmd = terminal_command(conf)
+    if cmd is None:
+        return False
+    flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if cmd[0] != "wt" else 0
+    subprocess.Popen(cmd, cwd=working_dir(conf), creationflags=flags)
+    return True
+
+
 class _SessionGone(Exception):
     pass
 

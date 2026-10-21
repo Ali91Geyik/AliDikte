@@ -369,6 +369,15 @@ TR = {
         "Arada hiçbir model olmadan, duyulduğu gibi yapıştırılan bir dikte başlatır ve durdurur.",
     "Dictation mode": "Dikte modu",
     "Idea": "Fikir",
+    "Claude bridge": "Claude köprüsü",
+    "Your command is rewritten as a prompt first, and Claude Code's answer comes up in a panel with Copy and Continue in terminal, instead of being pasted.":
+        "Komutun önce prompt olarak düzenlenir; Claude Code'un cevabı yapıştırılmaz, "
+        "Kopyala ve Terminalde devam et düğmeleriyle bir panelde açılır.",
+    "Continue in terminal": "Terminalde devam et",
+    "Ready. {dictate} to dictate, {ask} for Claude.":
+        "Hazır. Dikte için {dictate}, Claude için {ask}.",
+    "the tray menu": "tepsi menüsü",
+    "Close": "Kapat",
     "Idea folder": "Fikir klasörü",
     "Idea mode does not paste: it adds what you said, word for word, to a dated file in this folder.":
         "Fikir modu yapıştırmaz: söylediğini kelimesi kelimesine bu klasördeki "

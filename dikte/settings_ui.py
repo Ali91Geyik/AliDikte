@@ -2067,6 +2067,12 @@ class SettingsWindow(QDialog):
 
         answer = QGroupBox(t("The answer"))
         answer_form = QFormLayout(answer)
+        self.claude_bridge = QCheckBox(t("Claude bridge"))
+        self.claude_bridge.setToolTip(t(
+            "Your command is rewritten as a prompt first, and Claude Code's answer "
+            "comes up in a panel with Copy and Continue in terminal, instead of "
+            "being pasted."))
+        answer_form.addRow("", self.claude_bridge)
         self.assistant_paste = QCheckBox(t("Paste it into the focused window"))
         self.assistant_paste.setToolTip(t(
             "It is copied to the clipboard either way."
@@ -2741,6 +2747,7 @@ class SettingsWindow(QDialog):
         self.assistant_timeout.setValue(int(conf["assistant_timeout"]))
         self.assistant_session_minutes.setValue(int(conf["assistant_session_minutes"]))
         self.assistant_paste.setChecked(conf["assistant_paste"])
+        self.claude_bridge.setChecked(conf["claude_bridge"])
         self.assistant_cleanup.setChecked(conf["assistant_cleanup"])
         self.assistant_prompt.setPlainText(
             conf["assistant_prompt"] or self._loaded_defaults["assistant"]
@@ -2929,6 +2936,7 @@ class SettingsWindow(QDialog):
         conf["assistant_timeout"] = self.assistant_timeout.value()
         conf["assistant_session_minutes"] = self.assistant_session_minutes.value()
         conf["assistant_paste"] = self.assistant_paste.isChecked()
+        conf["claude_bridge"] = self.claude_bridge.isChecked()
         conf["assistant_cleanup"] = self.assistant_cleanup.isChecked()
         assistant_prompt = self.assistant_prompt.toPlainText().strip()
         conf["assistant_prompt"] = ("" if assistant_prompt in (
